@@ -12,9 +12,9 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
+    <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans flex flex-col">
       
-      {/* 1. Шапка с логотипом (без текста) */}
+      {/* 1. Шапка с логотипом */}
       <header className="bg-white border-b border-slate-200 py-4 px-4 shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
           <img 
@@ -35,7 +35,7 @@ export default function Home() {
       </div>
 
       {/* 3. Основной контент */}
-      <div className="max-w-5xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-4 flex-grow w-full">
         
         {/* Список школ */}
         <div className="mb-10">
@@ -82,6 +82,14 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* 4. Подвал с описанием */}
+      <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200">
+        <p className="text-sm text-slate-400 leading-relaxed text-center">
+          Y.U.R.T.A - это особый веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
+        </p>
+      </footer>
+
     </main>
   );
 }
