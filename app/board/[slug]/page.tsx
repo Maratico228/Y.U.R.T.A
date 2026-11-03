@@ -9,7 +9,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [replyTo, setReplyTo] = useState<any>(null); // Состояние для ответа
+  const [replyTo, setReplyTo] = useState<any>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -22,11 +22,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   }, [params.slug]);
 
   const fetchPosts = async () => {
-    // Забираем посты, сортируем по bumped_at (свежие наверху)
+    // Скрываем посты, у которых 3+ жалобы
     const { data } = await supabase
       .from('posts')
       .select('*')
       .eq('board_slug', params.slug)
+      .lt('reports', 3)
       .order('bumped_at', { ascending: false });
     
     if (data) setPosts(data);
@@ -52,7 +53,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // Если отвечаем на пост, передаем parent_id
     const newPost = {
       board_slug: params.slug,
       nickname: nickname.trim() || null,
@@ -64,18 +64,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
-      // Если это ответ, обновляем bumped_at у родительского поста, чтобы он поднялся наверх
       if (replyTo) {
-        await supabase
-          .from('posts')
-          .update({ bumped_at: new Date().toISOString() })
-          .eq('id', replyTo.id);
+        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', replyTo.id);
       }
-
       setContent("");
       setNickname("");
       setFile(null);
-      setReplyTo(null); // Сбрасываем ответ
+      setReplyTo(null);
       fetchPosts();
     } else {
       alert("Ошибка при отправке: " + error.message);
@@ -96,10 +91,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           const scale = MAX_WIDTH / img.width;
           canvas.width = MAX_WIDTH;
           canvas.height = img.height * scale;
-          
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
           canvas.toBlob((blob) => {
             if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
           }, 'image/jpeg', 0.8);
@@ -113,9 +106,44 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Разделяем посты на треды (корневые) и ответы
+  // Логика лайков и дизлайков
+  const handleVote = async (post: any, type: 'like' | 'dislike') => {
+    const newValue = type === 'like' ? post.likes + 1 : post.dislikes + 1;
+    const field = type === 'like' ? 'likes' : 'dislikes';
+    
+    // Оптимистичное обновление (сразу в UI)
+    setPosts(posts.map(p => p.id === post.id ? { ...p, [field]: p[field] + 1 } : p));
+    
+    // Обновление в базе
+    await supabase.from('posts').update({ [field]: newValue }).eq('id', post.id);
+  };
+
+  // Логика жалоб
+  const handleReport = async (post: any) => {
+    const newReports = (post.reports || 0) + 1;
+    setPosts(posts.map(p => p.id === post.id ? { ...p, reports: newReports } : p));
+    
+    await supabase.from('posts').update({ reports: newReports }).eq('id', post.id);
+    
+    // Если это 3-я жалоба, перезагружаем ленту, чтобы пост исчез
+    if (newReports >= 3) fetchPosts();
+  };
+
   const threads = posts.filter(p => !p.parent_id);
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
+
+  // SVG Иконки
+  const ArrowUp = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
+    </svg>
+  );
+
+  const ArrowDown = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
+    </svg>
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
@@ -134,7 +162,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <p className="text-slate-500">{boardName}</p>
         </div>
 
-        {/* Форма (привязана к ref для скролла) */}
         <div ref={formRef} className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm mb-8">
           <h2 className="text-lg font-bold mb-4">
             {replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}
@@ -180,7 +207,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </form>
         </div>
 
-        {/* Лента тредов */}
         <div className="flex flex-col gap-6">
           {threads.length === 0 ? (
             <div className="text-center text-slate-500 py-10 bg-white rounded-lg border border-slate-200">
@@ -190,67 +216,79 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             threads.map((thread) => {
               const replies = getReplies(thread.id);
               return (
-                <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                  {/* Корневой пост */}
-                  <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`font-bold ${thread.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
-                        {thread.nickname || "Аноним"}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {new Date(thread.created_at).toLocaleString('ru-RU')}
-                      </span>
-                      <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
-                    </div>
-                    <p className="text-slate-800 whitespace-pre-wrap">{thread.content}</p>
-                    {thread.image_url && (
-                      <div className="mt-3">
-                        <img 
-                          src={thread.image_url} 
-                          alt="Прикрепленное изображение" 
-                          className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain"
-                        />
-                      </div>
-                    )}
+                <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex">
+                  
+                  {/* Блок рейтинга (слева) */}
+                  <div className="bg-slate-50 border-r border-slate-100 p-2 flex flex-col items-center gap-1 min-w-[50px]">
+                    <button onClick={() => handleVote(thread, 'like')} className="text-slate-400 hover:text-blue-600 transition-colors p-1">
+                      <ArrowUp />
+                    </button>
+                    <span className="text-sm font-bold text-slate-700">{thread.likes || 0}</span>
+                    <button onClick={() => handleVote(thread, 'dislike')} className="text-slate-400 hover:text-red-500 transition-colors p-1">
+                      <ArrowDown />
+                    </button>
                   </div>
 
-                  {/* Ответы */}
-                  {replies.length > 0 && (
-                    <div className="bg-white flex flex-col">
-                      {replies.map((reply) => (
-                        <div key={reply.id} className="p-4 border-t border-slate-100 ml-4 border-l-2 border-l-blue-200">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
-                              {reply.nickname || "Аноним"}
-                            </span>
-                            <span className="text-xs text-slate-400">
-                              {new Date(reply.created_at).toLocaleString('ru-RU')}
-                            </span>
-                            <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
-                          </div>
-                          <p className="text-slate-800 text-sm whitespace-pre-wrap">{reply.content}</p>
-                          {reply.image_url && (
-                            <div className="mt-2">
-                              <img 
-                                src={reply.image_url} 
-                                alt="Прикрепленное изображение" 
-                                className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain"
-                              />
-                            </div>
-                          )}
+                  {/* Контент поста */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="p-5 border-b border-slate-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`font-bold ${thread.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
+                          {thread.nickname || "Аноним"}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(thread.created_at).toLocaleString('ru-RU')}
+                        </span>
+                        <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
+                      </div>
+                      <p className="text-slate-800 whitespace-pre-wrap">{thread.content}</p>
+                      {thread.image_url && (
+                        <div className="mt-3">
+                          <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" />
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
 
-                  {/* Кнопка ответа */}
-                  <div className="p-3 bg-slate-50 border-t border-slate-100">
-                    <button 
-                      onClick={() => handleReplyClick(thread)}
-                      className="text-sm text-blue-700 hover:text-teal-700 font-medium"
-                    >
-                      Ответить в тред
-                    </button>
+                    {replies.length > 0 && (
+                      <div className="bg-white flex flex-col">
+                        {replies.map((reply) => (
+                          <div key={reply.id} className="p-4 border-t border-slate-100 ml-4 border-l-2 border-l-blue-200">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
+                                {reply.nickname || "Аноним"}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                {new Date(reply.created_at).toLocaleString('ru-RU')}
+                              </span>
+                              <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
+                            </div>
+                            <p className="text-slate-800 text-sm whitespace-pre-wrap">{reply.content}</p>
+                            {reply.image_url && (
+                              <div className="mt-2">
+                                <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Панель управления под постом */}
+                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                      <button 
+                        onClick={() => handleReplyClick(thread)}
+                        className="text-sm text-blue-700 hover:text-teal-700 font-medium"
+                      >
+                        Ответить в тред
+                      </button>
+                      <button 
+                        onClick={() => handleReport(thread)}
+                        className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                        title="Пожаловаться"
+                      >
+                        Жалоба
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
