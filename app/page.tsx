@@ -16,12 +16,11 @@ export default function Home() {
       
       {/* 1. Шапка с логотипом */}
       <header className="bg-white border-b border-slate-200 py-4 px-4">
-        <div className="max-w-4xl mx-auto flex items-center gap-4">
-          {/* Твой логотип */}
+        <div className="max-w-5xl mx-auto flex items-center gap-4">
           <img 
             src="/logo.png" 
             alt="Логотип Y.U.R.T.A" 
-            className="h-12 w-auto object-contain" 
+            className="h-12 w-auto object-contain" // Фиксируем высоту в 48px
           />
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
@@ -35,29 +34,29 @@ export default function Home() {
       </header>
 
       {/* 2. Заглавный текст (картинка) */}
-      {/* Если файл называется иначе (например, title.jpg), поменяй название здесь */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <img 
           src="/title.png" 
           alt="Заглавный текст Y.U.R.T.A" 
-          className="w-full max-w-3xl mx-auto rounded-lg shadow-sm border border-slate-200" 
+          className="w-full max-w-2xl object-contain rounded-lg shadow-sm border border-slate-200" // Ограничиваем максимальную ширину
         />
       </div>
 
-      {/* 3. Основной контент (Списки) */}
-      <div className="max-w-4xl mx-auto px-4">
+      {/* 3. Основной контент */}
+      <div className="max-w-5xl mx-auto px-4">
         
         {/* Список школ */}
         <div className="mb-10">
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 pb-1 inline-block text-slate-800">
             Доски Высших школ
           </h2>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 mt-4">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             {schools.map((school) => (
               <li key={school.slug}>
                 <a 
                   href={`/board/${school.slug}`}
-                  className="text-blue-600 hover:text-blue-800 hover:underline text-[15px]"
+                  /* Ховер: из синего #0056B3 в бирюзовый #00796B */
+                  className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
                 >
                   /{school.slug}/ — {school.name}
                 </a>
@@ -71,14 +70,20 @@ export default function Home() {
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 pb-1 inline-block text-slate-800">
             Общие разделы
           </h2>
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2 mt-4">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             <li>
-              <a href="/board/general" className="text-blue-600 hover:text-blue-800 hover:underline text-[15px]">
+              <a 
+                href="/board/general" 
+                className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
+              >
                 /general/ — Общая беседа
               </a>
             </li>
             <li>
-              <a href="/board/flood" className="text-blue-600 hover:text-blue-800 hover:underline text-[15px]">
+              <a 
+                href="/board/flood" 
+                className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
+              >
                 /flood/ — Раздел бред
               </a>
             </li>
