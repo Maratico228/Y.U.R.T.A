@@ -22,49 +22,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   }, [params.slug]);
 
   const fetchPosts = async () => {
+    // Берем посты, сортируем по времени последнего ответа (бампингу)
     const { data } = await supabase
       .from('posts')
       .select('*')
-      .eq('board_slug', params.slug);
+      .eq('board_slug', params.slug)
+      .order('bumped_at', { ascending: false });
     
-    if (data) {
-      const postsWithVotes = await Promise.all(data.map(async (post) => {
-        const { data: votes } = await supabase.rpc('get_post_votes', { p_id: post.id });
-        return { 
-          ...post, 
-          likes: votes?.[0]?.likes_count || 0, 
-          dislikes: votes?.[0]?.dislikes_count || 0 
-        };
-      }));
-
-      // Сортируем на клиенте
-      const now = new Date().getTime();
-      const HOUR = 60 * 60 * 1000;
-      
-      postsWithVotes.sort((a, b) => {
-        const aAge = now - new Date(a.created_at).getTime();
-        const bAge = now - new Date(b.created_at).getTime();
-        
-        // 1. Если посту меньше 24 часов — он свежий, кидаем наверх
-        const aIsFresh = aAge < 24 * HOUR;
-        const bIsFresh = bAge < 24 * HOUR;
-
-        if (aIsFresh && !bIsFresh) return -1;
-        if (!aIsFresh && bIsFresh) return 1;
-        
-        if (aIsFresh && bIsFresh) {
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        }
-
-        // 2. Если оба старые — считаем "Горячий рейтинг"
-        const aScore = (a.likes - a.dislikes) + (new Date(a.bumped_at).getTime() / 10000000000); 
-        const bScore = (b.likes - b.dislikes) + (new Date(b.bumped_at).getTime() / 10000000000);
-        
-        return bScore - aScore;
-      });
-
-      setPosts(postsWithVotes);
-    }
+    if (data) setPosts(data);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,66 +105,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleVote = async (post: any, type: 'like' | 'dislike') => {
-    const votedPosts = JSON.parse(localStorage.getItem('votedPosts') || '{}');
-    
-    if (votedPosts[post.id]) {
-      alert("Вы уже голосовали за этот пост!");
-      return;
-    }
-
-    votedPosts[post.id] = type;
-    localStorage.setItem('votedPosts', JSON.stringify(votedPosts));
-
-    const isLike = type === 'like';
-    
-    const updatedPosts = posts.map(p => {
-      if (p.id === post.id) {
-        return {
-          ...p,
-          likes: isLike ? (p.likes || 0) + 1 : (p.likes || 0),
-          dislikes: !isLike ? (p.dislikes || 0) + 1 : (p.dislikes || 0)
-        };
-      }
-      return p;
-    });
-
-    setPosts(updatedPosts);
-    
-    await supabase.from('votes').insert({
-      post_id: post.id,
-      vote_type: type
-    });
-  };
-
-  const handleReport = async (post: any) => {
-    const confirmDelete = window.confirm("Вы уверены, что хотите пожаловаться? Пост будет удален.");
-    if (!confirmDelete) return;
-
-    const { error } = await supabase.from('posts').delete().eq('id', post.id);
-
-    if (error) {
-      alert("Ошибка при удалении: " + error.message);
-    } else {
-      setPosts(posts.filter(p => p.id !== post.id));
-      alert("Жалоба отправлена, пост удален.");
-    }
-  };
-
   const threads = posts.filter(p => !p.parent_id);
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
-
-  const ArrowUp = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-      <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
-    </svg>
-  );
-
-  const ArrowDown = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-      <path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>
-    </svg>
-  );
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
@@ -274,76 +181,57 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             threads.map((thread) => {
               const replies = getReplies(thread.id);
               return (
-                <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex">
+                <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   
-                  <div className="bg-slate-50 border-r border-slate-100 p-2 flex flex-col items-center gap-1 min-w-[50px]">
-                    <button onClick={() => handleVote(thread, 'like')} className="text-slate-400 hover:text-blue-600 transition-colors p-1">
-                      <ArrowUp />
-                    </button>
-                    <span className="text-sm font-bold text-slate-700">{thread.likes || 0}</span>
-                    <button onClick={() => handleVote(thread, 'dislike')} className="text-slate-400 hover:text-red-500 transition-colors p-1">
-                      <ArrowDown />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 flex flex-col">
-                    <div className="p-5 border-b border-slate-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`font-bold ${thread.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
-                          {thread.nickname || "Аноним"}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {new Date(thread.created_at).toLocaleString('ru-RU')}
-                        </span>
-                        <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
-                      </div>
-                      <p className="text-slate-800 whitespace-pre-wrap">{thread.content}</p>
-                      {thread.image_url && (
-                        <div className="mt-3">
-                          <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" />
-                        </div>
-                      )}
+                  <div className="p-5 border-b border-slate-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`font-bold ${thread.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
+                        {thread.nickname || "Аноним"}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {new Date(thread.created_at).toLocaleString('ru-RU')}
+                      </span>
+                      <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
                     </div>
-
-                    {replies.length > 0 && (
-                      <div className="bg-white flex flex-col">
-                        {replies.map((reply) => (
-                          <div key={reply.id} className="p-4 border-t border-slate-100 ml-4 border-l-2 border-l-blue-200">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
-                                {reply.nickname || "Аноним"}
-                              </span>
-                              <span className="text-xs text-slate-400">
-                                {new Date(reply.created_at).toLocaleString('ru-RU')}
-                              </span>
-                              <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
-                            </div>
-                            <p className="text-slate-800 text-sm whitespace-pre-wrap">{reply.content}</p>
-                            {reply.image_url && (
-                              <div className="mt-2">
-                                <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                    <p className="text-slate-800 whitespace-pre-wrap">{thread.content}</p>
+                    {thread.image_url && (
+                      <div className="mt-3">
+                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" />
                       </div>
                     )}
+                  </div>
 
-                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-                      <button 
-                        onClick={() => handleReplyClick(thread)}
-                        className="text-sm text-blue-700 hover:text-teal-700 font-medium"
-                      >
-                        Ответить в тред
-                      </button>
-                      <button 
-                        onClick={() => handleReport(thread)}
-                        className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-                        title="Пожаловаться"
-                      >
-                        Жалоба
-                      </button>
+                  {replies.length > 0 && (
+                    <div className="bg-white flex flex-col">
+                      {replies.map((reply) => (
+                        <div key={reply.id} className="p-4 border-t border-slate-100 ml-4 border-l-2 border-l-blue-200">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
+                              {reply.nickname || "Аноним"}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {new Date(reply.created_at).toLocaleString('ru-RU')}
+                            </span>
+                            <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
+                          </div>
+                          <p className="text-slate-800 text-sm whitespace-pre-wrap">{reply.content}</p>
+                          {reply.image_url && (
+                            <div className="mt-2">
+                              <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
+                  )}
+
+                  <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                    <button 
+                      onClick={() => handleReplyClick(thread)}
+                      className="text-sm text-blue-700 hover:text-teal-700 font-medium"
+                    >
+                      Ответить в тред
+                    </button>
                   </div>
                 </div>
               );
