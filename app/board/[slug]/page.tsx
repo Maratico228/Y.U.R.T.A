@@ -1,4 +1,4 @@
-"use client"; // Важно: включаем клиентский режим для работы с формой
+"use client"; // Важно: включаем клиентский режим для работы с ормой
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
