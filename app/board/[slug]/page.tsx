@@ -10,7 +10,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
-  const [user, setUser] = useState<any>(null); // Текущий анонимный пользователь
+  const [user, setUser] = useState<any>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -18,16 +18,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   : params.slug === 'flood' ? 'Раздел бред' 
                   : `Доска: ${params.slug}`;
 
-  // 1. Инициализация анонимного пользователя
+  // Фоновая авторизация при загрузке
   useEffect(() => {
     const initUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // Если нет сессии — логиним анонимно
-        const { data, error } = await supabase.auth.signInAnonymously();
-        if (!error && data.user) setUser(data.user);
-      } else {
+      if (session) {
         setUser(session.user);
+      } else {
+        const { data } = await supabase.auth.signInAnonymously();
+        if (data.user) setUser(data.user);
       }
     };
     initUser();
@@ -38,17 +37,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   }, [params.slug]);
 
   const fetchPosts = async () => {
-    // Забираем посты. Жалобы и голоса мы считаем отдельно (или через view), 
-    // но для простоты пока оставим старые поля, а голоса будем докидывать через функцию.
     const { data } = await supabase
       .from('posts')
       .select('*')
       .eq('board_slug', params.slug)
-      .lt('reports', 3) // Скрываем посты с 3+ жалобами
+      .lt('reports', 3)
       .order('bumped_at', { ascending: false });
     
     if (data) {
-      // Для каждого поста подтягиваем актуальные голоса
       const postsWithVotes = await Promise.all(data.map(async (post) => {
         const { data: votes } = await supabase.rpc('get_post_votes', { p_id: post.id });
         return { 
@@ -61,13 +57,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     }
   };
 
+  // Отправка поста больше не ждет авторизации
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !user) return;
+    if (!content.trim()) return;
     setLoading(true);
 
     let imageUrl = null;
-
     if (file) {
       const compressedFile = await compressImage(file);
       const fileName = `${Date.now()}-${compressedFile.name}`;
@@ -134,38 +130,50 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // 2. Логика голосования (с защитой)
-  const handleVote = async (post: any, type: 'like' | 'dislike') => {
-    if (!user) return alert("Подождите секунду, идет авторизация...");
+  // Универсальная функция получения юзера (ждет максимум 1 секунду)
+  const getUser = async () => {
+    if (user) return user;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      return session.user;
+    }
+    const { data } = await supabase.auth.signInAnonymously();
+    if (data.user) {
+      setUser(data.user);
+      return data.user;
+    }
+    return null;
+  };
 
-    // Пытаемся вставить голос. Если пользователь уже голосовал, 
-    // база данных (UNIQUE constraint) выдаст ошибку.
+  const handleVote = async (post: any, type: 'like' | 'dislike') => {
+    const currentUser = await getUser();
+    if (!currentUser) return alert("Не удалось проголосовать. Попробуйте еще раз.");
+
     const { error } = await supabase.from('votes').insert({
       post_id: post.id,
-      user_id: user.id,
+      user_id: currentUser.id,
       vote_type: type
     });
 
     if (error) {
-      if (error.code === '23505') { // Код ошибки уникальности
+      if (error.code === '23505') {
         alert("Вы уже голосовали за этот пост!");
       } else {
         alert("Ошибка: " + error.message);
       }
       return;
     }
-
-    // Если успешно — перезагружаем ленту, чтобы обновить счетчики
     fetchPosts();
   };
 
-  // 3. Логика жалоб (с защитой)
   const handleReport = async (post: any) => {
-    if (!user) return alert("Подождите секунду...");
+    const currentUser = await getUser();
+    if (!currentUser) return alert("Не удалось отправить жалобу.");
 
     const { error } = await supabase.from('reports').insert({
       post_id: post.id,
-      user_id: user.id
+      user_id: currentUser.id
     });
 
     if (error) {
@@ -177,12 +185,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return;
     }
 
-    // Если жалоба прошла успешно, увеличиваем счетчик в посте (для фильтрации)
     const newReports = (post.reports || 0) + 1;
     await supabase.from('posts').update({ reports: newReports }).eq('id', post.id);
     
     if (newReports >= 3) {
-      fetchPosts(); // Пост исчезнет
+      fetchPosts();
     } else {
       alert("Жалоба отправлена.");
     }
@@ -191,7 +198,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const threads = posts.filter(p => !p.parent_id);
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
 
-  // SVG Иконки (без изменений)
   const ArrowUp = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
       <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
@@ -257,10 +263,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               />
               <button 
                 type="submit" 
-                disabled={loading || !user}
+                disabled={loading} // Убрали зависимость от !user
                 className="bg-blue-700 text-white font-bold py-2 px-6 rounded hover:bg-teal-700 transition-colors disabled:opacity-50"
               >
-                {loading ? "Отправка..." : !user ? "Загрузка..." : "Отправить"}
+                {loading ? "Отправка..." : "Отправить"}
               </button>
             </div>
           </form>
