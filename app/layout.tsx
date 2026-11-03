@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Юрта (Y.U.R.T.A)",
-  description: "Анонимная имиджборда USU",
+  description: "Анонимная имиджборда UGRASU",
 };
 
 export default function RootLayout({
