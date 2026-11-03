@@ -9,30 +9,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // Для полоски загрузки
   const [replyTo, setReplyTo] = useState<any>(null);
-  const [user, setUser] = useState<any>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
 
   const boardName = params.slug === 'general' ? 'Общая беседа' 
                   : params.slug === 'flood' ? 'Раздел бред' 
                   : `Доска: ${params.slug}`;
-
-  useEffect(() => {
-    const initUser = async () => {
-      setIsAuthLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
-      } else {
-        const { data } = await supabase.auth.signInAnonymously();
-        if (data.user) setUser(data.user);
-      }
-      setIsAuthLoading(false);
-    };
-    initUser();
-  }, []);
 
   useEffect(() => {
     fetchPosts();
@@ -42,9 +25,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { data } = await supabase
       .from('posts')
       .select('*')
-      .eq('board_slug', params.slug)
-      .lt('reports', 3)
-      .order('bumped_at', { ascending: false });
+      .eq('board_slug', params.slug);
     
     if (data) {
       const postsWithVotes = await Promise.all(data.map(async (post) => {
@@ -55,6 +36,33 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           dislikes: votes?.[0]?.dislikes_count || 0 
         };
       }));
+
+      // Сортируем на клиенте
+      const now = new Date().getTime();
+      const HOUR = 60 * 60 * 1000;
+      
+      postsWithVotes.sort((a, b) => {
+        const aAge = now - new Date(a.created_at).getTime();
+        const bAge = now - new Date(b.created_at).getTime();
+        
+        // 1. Если посту меньше 24 часов — он свежий, кидаем наверх
+        const aIsFresh = aAge < 24 * HOUR;
+        const bIsFresh = bAge < 24 * HOUR;
+
+        if (aIsFresh && !bIsFresh) return -1;
+        if (!aIsFresh && bIsFresh) return 1;
+        
+        if (aIsFresh && bIsFresh) {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+
+        // 2. Если оба старые — считаем "Горячий рейтинг"
+        const aScore = (a.likes - a.dislikes) + (new Date(a.bumped_at).getTime() / 10000000000); 
+        const bScore = (b.likes - b.dislikes) + (new Date(b.bumped_at).getTime() / 10000000000);
+        
+        return bScore - aScore;
+      });
+
       setPosts(postsWithVotes);
     }
   };
@@ -132,86 +140,49 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const getUser = async () => {
-    if (user) return user;
-    setIsAuthLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      setUser(session.user);
-      setIsAuthLoading(false);
-      return session.user;
-    }
-    const { data } = await supabase.auth.signInAnonymously();
-    if (data.user) {
-      setUser(data.user);
-      setIsAuthLoading(false);
-      return data.user;
-    }
-    setIsAuthLoading(false);
-    return null;
-  };
-
   const handleVote = async (post: any, type: 'like' | 'dislike') => {
-    const currentUser = await getUser();
-    if (!currentUser) return alert("Не удалось проголосовать.");
-
-    const isLike = type === 'like';
-    const currentLikes = post.likes || 0;
-    const currentDislikes = post.dislikes || 0;
-
-    setPosts(posts.map(p => {
-      if (p.id === post.id) {
-        return {
-          ...p,
-          likes: isLike ? currentLikes + 1 : currentLikes,
-          dislikes: !isLike ? currentDislikes + 1 : currentDislikes
-        };
-      }
-      return p;
-    }));
-
-    const { error } = await supabase.from('votes').insert({
-      post_id: post.id,
-      user_id: currentUser.id,
-      vote_type: type
-    });
-
-    if (error) {
-      setPosts(posts.map(p => {
-        if (p.id === post.id) {
-          return { ...p, likes: currentLikes, dislikes: currentDislikes };
-        }
-        return p;
-      }));
-      if (error.code === '23505') alert("Вы уже голосовали за этот пост!");
-      else alert("Ошибка: " + error.message);
-    } else {
-      fetchPosts();
-    }
-  };
-
-  const handleReport = async (post: any) => {
-    const currentUser = await getUser();
-    if (!currentUser) return alert("Не удалось отправить жалобу.");
-
-    const { error } = await supabase.from('reports').insert({
-      post_id: post.id,
-      user_id: currentUser.id
-    });
-
-    if (error) {
-      if (error.code === '23505') alert("Вы уже жаловались на этот пост!");
-      else alert("Ошибка: " + error.message);
+    const votedPosts = JSON.parse(localStorage.getItem('votedPosts') || '{}');
+    
+    if (votedPosts[post.id]) {
+      alert("Вы уже голосовали за этот пост!");
       return;
     }
 
-    const newReports = (post.reports || 0) + 1;
-    await supabase.from('posts').update({ reports: newReports }).eq('id', post.id);
+    votedPosts[post.id] = type;
+    localStorage.setItem('votedPosts', JSON.stringify(votedPosts));
+
+    const isLike = type === 'like';
     
-    if (newReports >= 3) {
-      fetchPosts();
+    const updatedPosts = posts.map(p => {
+      if (p.id === post.id) {
+        return {
+          ...p,
+          likes: isLike ? (p.likes || 0) + 1 : (p.likes || 0),
+          dislikes: !isLike ? (p.dislikes || 0) + 1 : (p.dislikes || 0)
+        };
+      }
+      return p;
+    });
+
+    setPosts(updatedPosts);
+    
+    await supabase.from('votes').insert({
+      post_id: post.id,
+      vote_type: type
+    });
+  };
+
+  const handleReport = async (post: any) => {
+    const confirmDelete = window.confirm("Вы уверены, что хотите пожаловаться? Пост будет удален.");
+    if (!confirmDelete) return;
+
+    const { error } = await supabase.from('posts').delete().eq('id', post.id);
+
+    if (error) {
+      alert("Ошибка при удалении: " + error.message);
     } else {
-      alert("Жалоба отправлена.");
+      setPosts(posts.filter(p => p.id !== post.id));
+      alert("Жалоба отправлена, пост удален.");
     }
   };
 
@@ -247,16 +218,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <p className="text-slate-500">{boardName}</p>
         </div>
 
-        {/* Блок формы с полоской загрузки */}
         <div ref={formRef} className="bg-white rounded-lg border border-slate-200 shadow-sm mb-8 relative overflow-hidden">
-          
-          {/* Полоска загрузки (появляется при авторизации) */}
-          {isAuthLoading && (
-            <div className="absolute top-0 left-0 right-0 h-1 bg-slate-100 overflow-hidden z-10">
-              <div className="w-full h-full bg-blue-600 animate-pulse origin-left"></div>
-            </div>
-          )}
-
           <div className="p-6">
             <h2 className="text-lg font-bold mb-4">
               {replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}
@@ -284,7 +246,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 required
               ></textarea>
               
-              {/* Контейнер для кнопок: на мобилках переносим на новую строку, если не влезают */}
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                 <input 
                   type="file" 
