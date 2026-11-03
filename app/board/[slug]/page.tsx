@@ -10,6 +10,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
+  const [user, setUser] = useState<any>(null); // Текущий анонимный пользователь
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -17,25 +18,52 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   : params.slug === 'flood' ? 'Раздел бред' 
                   : `Доска: ${params.slug}`;
 
+  // 1. Инициализация анонимного пользователя
+  useEffect(() => {
+    const initUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Если нет сессии — логиним анонимно
+        const { data, error } = await supabase.auth.signInAnonymously();
+        if (!error && data.user) setUser(data.user);
+      } else {
+        setUser(session.user);
+      }
+    };
+    initUser();
+  }, []);
+
   useEffect(() => {
     fetchPosts();
   }, [params.slug]);
 
   const fetchPosts = async () => {
-    // Скрываем посты, у которых 3+ жалобы
+    // Забираем посты. Жалобы и голоса мы считаем отдельно (или через view), 
+    // но для простоты пока оставим старые поля, а голоса будем докидывать через функцию.
     const { data } = await supabase
       .from('posts')
       .select('*')
       .eq('board_slug', params.slug)
-      .lt('reports', 3)
+      .lt('reports', 3) // Скрываем посты с 3+ жалобами
       .order('bumped_at', { ascending: false });
     
-    if (data) setPosts(data);
+    if (data) {
+      // Для каждого поста подтягиваем актуальные голоса
+      const postsWithVotes = await Promise.all(data.map(async (post) => {
+        const { data: votes } = await supabase.rpc('get_post_votes', { p_id: post.id });
+        return { 
+          ...post, 
+          likes: votes?.[0]?.likes_count || 0, 
+          dislikes: votes?.[0]?.dislikes_count || 0 
+        };
+      }));
+      setPosts(postsWithVotes);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() || !user) return;
     setLoading(true);
 
     let imageUrl = null;
@@ -106,33 +134,64 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Логика лайков и дизлайков
+  // 2. Логика голосования (с защитой)
   const handleVote = async (post: any, type: 'like' | 'dislike') => {
-    const newValue = type === 'like' ? post.likes + 1 : post.dislikes + 1;
-    const field = type === 'like' ? 'likes' : 'dislikes';
-    
-    // Оптимистичное обновление (сразу в UI)
-    setPosts(posts.map(p => p.id === post.id ? { ...p, [field]: p[field] + 1 } : p));
-    
-    // Обновление в базе
-    await supabase.from('posts').update({ [field]: newValue }).eq('id', post.id);
+    if (!user) return alert("Подождите секунду, идет авторизация...");
+
+    // Пытаемся вставить голос. Если пользователь уже голосовал, 
+    // база данных (UNIQUE constraint) выдаст ошибку.
+    const { error } = await supabase.from('votes').insert({
+      post_id: post.id,
+      user_id: user.id,
+      vote_type: type
+    });
+
+    if (error) {
+      if (error.code === '23505') { // Код ошибки уникальности
+        alert("Вы уже голосовали за этот пост!");
+      } else {
+        alert("Ошибка: " + error.message);
+      }
+      return;
+    }
+
+    // Если успешно — перезагружаем ленту, чтобы обновить счетчики
+    fetchPosts();
   };
 
-  // Логика жалоб
+  // 3. Логика жалоб (с защитой)
   const handleReport = async (post: any) => {
+    if (!user) return alert("Подождите секунду...");
+
+    const { error } = await supabase.from('reports').insert({
+      post_id: post.id,
+      user_id: user.id
+    });
+
+    if (error) {
+      if (error.code === '23505') {
+        alert("Вы уже жаловались на этот пост!");
+      } else {
+        alert("Ошибка: " + error.message);
+      }
+      return;
+    }
+
+    // Если жалоба прошла успешно, увеличиваем счетчик в посте (для фильтрации)
     const newReports = (post.reports || 0) + 1;
-    setPosts(posts.map(p => p.id === post.id ? { ...p, reports: newReports } : p));
-    
     await supabase.from('posts').update({ reports: newReports }).eq('id', post.id);
     
-    // Если это 3-я жалоба, перезагружаем ленту, чтобы пост исчез
-    if (newReports >= 3) fetchPosts();
+    if (newReports >= 3) {
+      fetchPosts(); // Пост исчезнет
+    } else {
+      alert("Жалоба отправлена.");
+    }
   };
 
   const threads = posts.filter(p => !p.parent_id);
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
 
-  // SVG Иконки
+  // SVG Иконки (без изменений)
   const ArrowUp = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
       <path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>
@@ -198,10 +257,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               />
               <button 
                 type="submit" 
-                disabled={loading}
+                disabled={loading || !user}
                 className="bg-blue-700 text-white font-bold py-2 px-6 rounded hover:bg-teal-700 transition-colors disabled:opacity-50"
               >
-                {loading ? "Отправка..." : "Отправить"}
+                {loading ? "Отправка..." : !user ? "Загрузка..." : "Отправить"}
               </button>
             </div>
           </form>
@@ -218,7 +277,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               return (
                 <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex">
                   
-                  {/* Блок рейтинга (слева) */}
                   <div className="bg-slate-50 border-r border-slate-100 p-2 flex flex-col items-center gap-1 min-w-[50px]">
                     <button onClick={() => handleVote(thread, 'like')} className="text-slate-400 hover:text-blue-600 transition-colors p-1">
                       <ArrowUp />
@@ -229,7 +287,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     </button>
                   </div>
 
-                  {/* Контент поста */}
                   <div className="flex-1 flex flex-col">
                     <div className="p-5 border-b border-slate-100">
                       <div className="flex items-center gap-2 mb-2">
@@ -273,7 +330,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       </div>
                     )}
 
-                    {/* Панель управления под постом */}
                     <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
                       <button 
                         onClick={() => handleReplyClick(thread)}
