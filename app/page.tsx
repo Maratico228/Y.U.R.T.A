@@ -15,30 +15,32 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
       
       {/* 1. Шапка с логотипом */}
-      <header className="bg-white border-b border-slate-200 py-4 px-4">
+      <header className="bg-white border-b border-slate-200 py-4 px-4 shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center gap-4">
+          {/* Жестко задаем высоту и ширину логотипа */}
           <img 
             src="/logo.png" 
             alt="Логотип Y.U.R.T.A" 
-            className="h-12 w-auto object-contain" // Фиксируем высоту в 48px
+            style={{ height: '48px', width: 'auto', objectFit: 'contain' }}
           />
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
               Y.U.R.T.A
             </h1>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-500 font-medium">
               Анонимная имиджборда ЮГУ
             </p>
           </div>
         </div>
       </header>
 
-      {/* 2. Заглавный текст (картинка) */}
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* 2. Заглавный текст */}
+      <div className="max-w-5xl mx-auto px-4 py-8 flex justify-center">
+        {/* Жестко задаем максимальную ширину 400px и высоту 150px */}
         <img 
           src="/title.png" 
-          alt="Заглавный текст Y.U.R.T.A" 
-          className="w-full max-w-2xl object-contain rounded-lg shadow-sm border border-slate-200" // Ограничиваем максимальную ширину
+          alt="Заглавный текст" 
+          style={{ maxWidth: '400px', maxHeight: '150px', objectFit: 'contain' }} 
         />
       </div>
 
@@ -53,10 +55,10 @@ export default function Home() {
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             {schools.map((school) => (
               <li key={school.slug}>
+                {/* Используем стандартные цвета Tailwind, они точно сработают */}
                 <a 
                   href={`/board/${school.slug}`}
-                  /* Ховер: из синего #0056B3 в бирюзовый #00796B */
-                  className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
+                  className="text-blue-700 hover:text-teal-700 transition-colors duration-200 text-[16px] font-medium block"
                 >
                   /{school.slug}/ — {school.name}
                 </a>
@@ -74,7 +76,7 @@ export default function Home() {
             <li>
               <a 
                 href="/board/general" 
-                className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
+                className="text-blue-700 hover:text-teal-700 transition-colors duration-200 text-[16px] font-medium block"
               >
                 /general/ — Общая беседа
               </a>
@@ -82,7 +84,7 @@ export default function Home() {
             <li>
               <a 
                 href="/board/flood" 
-                className="text-[#0056B3] hover:text-[#00796B] transition-colors duration-200 text-[16px] font-medium"
+                className="text-blue-700 hover:text-teal-700 transition-colors duration-200 text-[16px] font-medium block"
               >
                 /flood/ — Раздел бред
               </a>
