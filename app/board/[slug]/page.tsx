@@ -9,6 +9,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // Для полоски загрузки
   const [replyTo, setReplyTo] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
 
@@ -20,12 +21,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   useEffect(() => {
     const initUser = async () => {
+      setIsAuthLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) setUser(session.user);
-      else {
+      if (session) {
+        setUser(session.user);
+      } else {
         const { data } = await supabase.auth.signInAnonymously();
         if (data.user) setUser(data.user);
       }
+      setIsAuthLoading(false);
     };
     initUser();
   }, []);
@@ -85,21 +89,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
-      // Если это ответ, обновляем bumped_at у корневого поста
       if (replyTo) {
-        // Находим корневой пост (если отвечаем на ответ, берем его родителя)
         const rootId = replyTo.parent_id || replyTo.id;
-        await supabase
-          .from('posts')
-          .update({ bumped_at: new Date().toISOString() })
-          .eq('id', rootId);
+        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
-      
       setContent("");
       setNickname("");
       setFile(null);
       setReplyTo(null);
-      fetchPosts(); // Перезагружаем ленту, чтобы увидеть бампинг
+      fetchPosts();
     } else {
       alert("Ошибка при отправке: " + error.message);
     }
@@ -136,25 +134,27 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const getUser = async () => {
     if (user) return user;
+    setIsAuthLoading(true);
     const { data: { session } } = await supabase.auth.getSession();
     if (session) {
       setUser(session.user);
+      setIsAuthLoading(false);
       return session.user;
     }
     const { data } = await supabase.auth.signInAnonymously();
     if (data.user) {
       setUser(data.user);
+      setIsAuthLoading(false);
       return data.user;
     }
+    setIsAuthLoading(false);
     return null;
   };
 
-  // Голосование с оптимистичным обновлением
   const handleVote = async (post: any, type: 'like' | 'dislike') => {
     const currentUser = await getUser();
     if (!currentUser) return alert("Не удалось проголосовать.");
 
-    // Оптимистичное обновление (сразу меняем UI)
     const isLike = type === 'like';
     const currentLikes = post.likes || 0;
     const currentDislikes = post.dislikes || 0;
@@ -170,7 +170,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return p;
     }));
 
-    // Отправляем в базу
     const { error } = await supabase.from('votes').insert({
       post_id: post.id,
       user_id: currentUser.id,
@@ -178,22 +177,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
 
     if (error) {
-      // Если ошибка (например, уже голосовал), откатываем изменения
       setPosts(posts.map(p => {
         if (p.id === post.id) {
-          return {
-            ...p,
-            likes: currentLikes,
-            dislikes: currentDislikes
-          };
+          return { ...p, likes: currentLikes, dislikes: currentDislikes };
         }
         return p;
       }));
-
       if (error.code === '23505') alert("Вы уже голосовали за этот пост!");
       else alert("Ошибка: " + error.message);
     } else {
-      // Если всё ок, перезагружаем ленту (чтобы подтянуть точные цифры)
       fetchPosts();
     }
   };
@@ -255,49 +247,61 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <p className="text-slate-500">{boardName}</p>
         </div>
 
-        <div ref={formRef} className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm mb-8">
-          <h2 className="text-lg font-bold mb-4">
-            {replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}
-          </h2>
-          {replyTo && (
-            <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">
-              Отменить ответ
-            </button>
-          )}
+        {/* Блок формы с полоской загрузки */}
+        <div ref={formRef} className="bg-white rounded-lg border border-slate-200 shadow-sm mb-8 relative overflow-hidden">
           
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <input 
-              type="text" 
-              placeholder="Твой ник (необязательно)" 
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-            />
-            <textarea 
-              placeholder="Текст сообщения..." 
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={4}
-              className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none"
-              required
-            ></textarea>
-            
-            <div className="flex items-center justify-between mt-2">
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
-              />
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="bg-blue-700 text-white font-bold py-2 px-6 rounded hover:bg-teal-700 transition-colors disabled:opacity-50"
-              >
-                {loading ? "Отправка..." : "Отправить"}
-              </button>
+          {/* Полоска загрузки (появляется при авторизации) */}
+          {isAuthLoading && (
+            <div className="absolute top-0 left-0 right-0 h-1 bg-slate-100 overflow-hidden z-10">
+              <div className="w-full h-full bg-blue-600 animate-pulse origin-left"></div>
             </div>
-          </form>
+          )}
+
+          <div className="p-6">
+            <h2 className="text-lg font-bold mb-4">
+              {replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}
+            </h2>
+            {replyTo && (
+              <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">
+                Отменить ответ
+              </button>
+            )}
+            
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <input 
+                type="text" 
+                placeholder="Твой ник (необязательно)" 
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+              />
+              <textarea 
+                placeholder="Текст сообщения..." 
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                rows={4}
+                className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                required
+              ></textarea>
+              
+              {/* Контейнер для кнопок: на мобилках переносим на новую строку, если не влезают */}
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 w-full sm:w-auto"
+                />
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="bg-blue-700 text-white font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded hover:bg-teal-700 transition-colors disabled:opacity-50 w-full sm:w-auto"
+                >
+                  {loading ? "Отправка..." : "Отправить"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
 
         <div className="flex flex-col gap-6">
