@@ -18,13 +18,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   : params.slug === 'flood' ? 'Раздел бред' 
                   : `Доска: ${params.slug}`;
 
-  // Фоновая авторизация при загрузке
   useEffect(() => {
     const initUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
-      } else {
+      if (session) setUser(session.user);
+      else {
         const { data } = await supabase.auth.signInAnonymously();
         if (data.user) setUser(data.user);
       }
@@ -57,7 +55,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  // Отправка поста больше не ждет авторизации
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
@@ -88,14 +85,21 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
+      // Если это ответ, обновляем bumped_at у корневого поста
       if (replyTo) {
-        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', replyTo.id);
+        // Находим корневой пост (если отвечаем на ответ, берем его родителя)
+        const rootId = replyTo.parent_id || replyTo.id;
+        await supabase
+          .from('posts')
+          .update({ bumped_at: new Date().toISOString() })
+          .eq('id', rootId);
       }
+      
       setContent("");
       setNickname("");
       setFile(null);
       setReplyTo(null);
-      fetchPosts();
+      fetchPosts(); // Перезагружаем ленту, чтобы увидеть бампинг
     } else {
       alert("Ошибка при отправке: " + error.message);
     }
@@ -130,7 +134,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Универсальная функция получения юзера (ждет максимум 1 секунду)
   const getUser = async () => {
     if (user) return user;
     const { data: { session } } = await supabase.auth.getSession();
@@ -146,10 +149,28 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return null;
   };
 
+  // Голосование с оптимистичным обновлением
   const handleVote = async (post: any, type: 'like' | 'dislike') => {
     const currentUser = await getUser();
-    if (!currentUser) return alert("Не удалось проголосовать. Попробуйте еще раз.");
+    if (!currentUser) return alert("Не удалось проголосовать.");
 
+    // Оптимистичное обновление (сразу меняем UI)
+    const isLike = type === 'like';
+    const currentLikes = post.likes || 0;
+    const currentDislikes = post.dislikes || 0;
+
+    setPosts(posts.map(p => {
+      if (p.id === post.id) {
+        return {
+          ...p,
+          likes: isLike ? currentLikes + 1 : currentLikes,
+          dislikes: !isLike ? currentDislikes + 1 : currentDislikes
+        };
+      }
+      return p;
+    }));
+
+    // Отправляем в базу
     const { error } = await supabase.from('votes').insert({
       post_id: post.id,
       user_id: currentUser.id,
@@ -157,14 +178,24 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
 
     if (error) {
-      if (error.code === '23505') {
-        alert("Вы уже голосовали за этот пост!");
-      } else {
-        alert("Ошибка: " + error.message);
-      }
-      return;
+      // Если ошибка (например, уже голосовал), откатываем изменения
+      setPosts(posts.map(p => {
+        if (p.id === post.id) {
+          return {
+            ...p,
+            likes: currentLikes,
+            dislikes: currentDislikes
+          };
+        }
+        return p;
+      }));
+
+      if (error.code === '23505') alert("Вы уже голосовали за этот пост!");
+      else alert("Ошибка: " + error.message);
+    } else {
+      // Если всё ок, перезагружаем ленту (чтобы подтянуть точные цифры)
+      fetchPosts();
     }
-    fetchPosts();
   };
 
   const handleReport = async (post: any) => {
@@ -177,11 +208,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
 
     if (error) {
-      if (error.code === '23505') {
-        alert("Вы уже жаловались на этот пост!");
-      } else {
-        alert("Ошибка: " + error.message);
-      }
+      if (error.code === '23505') alert("Вы уже жаловались на этот пост!");
+      else alert("Ошибка: " + error.message);
       return;
     }
 
@@ -263,7 +291,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               />
               <button 
                 type="submit" 
-                disabled={loading} // Убрали зависимость от !user
+                disabled={loading}
                 className="bg-blue-700 text-white font-bold py-2 px-6 rounded hover:bg-teal-700 transition-colors disabled:opacity-50"
               >
                 {loading ? "Отправка..." : "Отправить"}
