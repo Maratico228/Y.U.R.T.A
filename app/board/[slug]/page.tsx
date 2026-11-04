@@ -3,6 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
+// Список смайлов для панели
+const EMOJIS = [
+  "ಠ_ಠ", "(╯°□°)╯︵ ┻━┻", "( ͡° ͜ʖ ͡°)", ":3", "(´・ω・`)", 
+  "ヽ(´ー｀)┌", "＼(＾▽＾)／", "¯\\_(ツ)_/¯", "(⌐■_■)", 
+  "(╥﹏╥)", "(☞ﾟヮﾟ)☞", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥", "ヽ(`Д´)ﾉ"
+];
+
 export default function BoardPage({ params }: { params: { slug: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
   const [nickname, setNickname] = useState("");
@@ -11,7 +18,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
   
-  // Состояния для админа и поиска
   const [isAdmin, setIsAdmin] = useState(false);
   const [cooldown, setCooldown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,7 +96,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setIsAdmin(val === 'yurta_admin_2024');
   };
 
-  // Удаление
   const handleDelete = async (postId: number) => {
     if (!confirm("Удалить этот пост?")) return;
     const { data, error } = await supabase.rpc('delete_post_admin', { p_id: postId, p_password: 'yurta_admin_2024' });
@@ -98,7 +103,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     else fetchPosts();
   };
 
-  // Закрепление в каталоге (только для админа)
   const handlePin = async (postId: number, currentStatus: boolean) => {
     if (!confirm(currentStatus ? "Убрать из каталога?" : "Добавить в каталог?")) return;
     const { error } = await supabase.from('posts').update({ is_pinned: !currentStatus }).eq('id', postId);
@@ -133,16 +137,34 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const insertEmoji = (emoji: string) => {
+    setContent(prev => prev + " " + emoji + " ");
+  };
+
+  // Функция для подсветки смайлов в тексте
+  const renderContent = (text: string) => {
+    let formattedText = text;
+    
+    // Проходимся по каждому смайлу и оборачиваем его в синий span
+    EMOJIS.forEach(emoji => {
+      // Используем split и join, чтобы заменить все вхождения (без regex)
+      formattedText = formattedText.split(emoji).join(
+        `<span class="text-blue-700 font-bold">${emoji}</span>`
+      );
+    });
+
+    // Заменяем переносы строк на <br/>
+    formattedText = formattedText.replace(/\n/g, '<br/>');
+
+    return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
+  };
+
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
 
-  // Фильтрация для поиска и каталога
   const threads = posts.filter(p => !p.parent_id);
   
   const filteredThreads = threads.filter(t => {
-    // Если мы в каталоге, показываем только закрепленные
     if (activeTab === 'catalog' && !t.is_pinned) return false;
-    
-    // Если есть поисковый запрос, ищем по тексту или нику
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return t.content.toLowerCase().includes(query) || (t.nickname && t.nickname.toLowerCase().includes(query));
@@ -150,7 +172,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return true;
   });
 
-  // Иконки SVG
   const SearchIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-slate-400">
       <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
@@ -186,7 +207,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <p className="text-slate-500">{boardName}</p>
         </div>
 
-        {/* Табы (Доска / Каталог) и Поиск */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white p-2 rounded-lg border border-slate-200">
           <div className="flex gap-2 w-full sm:w-auto">
             <button 
@@ -217,7 +237,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
 
-        {/* Форма (скрываем, если мы в каталоге) */}
         {activeTab === 'board' && (
           <div ref={formRef} className="bg-white rounded-lg border border-slate-200 shadow-sm mb-8 relative overflow-hidden">
             <div className="p-6">
@@ -231,6 +250,22 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               )}
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                
+                {/* Панель смайлов */}
+                <div className="flex flex-wrap gap-2 p-2 bg-slate-50 rounded border border-slate-200">
+                  {EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => insertEmoji(emoji)}
+                      className="text-sm text-slate-600 hover:text-blue-700 hover:bg-white px-2 py-1 rounded transition-colors font-mono"
+                      title="Вставить смайл"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+
                 <input 
                   type="text" 
                   placeholder="Твой ник (необязательно)" 
@@ -245,7 +280,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={4}
-                  className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono"
                   required
                 ></textarea>
                 
@@ -275,7 +310,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         )}
 
-        {/* Лента тредов */}
         <div className="flex flex-col gap-6">
           {filteredThreads.length === 0 ? (
             <div className="text-center text-slate-500 py-10 bg-white rounded-lg border border-slate-200">
@@ -297,7 +331,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       </span>
                       <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
                       
-                      {/* Кнопки админа */}
                       {isAdmin && (
                         <div className="flex gap-2 ml-2">
                           <button onClick={() => handlePin(thread.id, thread.is_pinned)} className={`text-xs hover:underline ${thread.is_pinned ? 'text-orange-500' : 'text-slate-500'}`} title={thread.is_pinned ? "Открепить" : "Закрепить"}>
@@ -309,7 +342,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         </div>
                       )}
                     </div>
-                    <p className="text-slate-800 whitespace-pre-wrap">{thread.content}</p>
+                    {/* Используем renderContent для красивого вывода текста */}
+                    <div className="text-slate-800 whitespace-pre-wrap">{renderContent(thread.content)}</div>
+                    
                     {thread.image_url && (
                       <div className="mt-3">
                         <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" />
@@ -336,7 +371,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                               </button>
                             )}
                           </div>
-                          <p className="text-slate-800 text-sm whitespace-pre-wrap">{reply.content}</p>
+                          <div className="text-slate-800 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
+                          
                           {reply.image_url && (
                             <div className="mt-2">
                               <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
@@ -354,9 +390,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     >
                       Ответить в тред
                     </button>
-                    {activeTab === 'catalog' && (
-                       <a href={`#thread-${thread.id}`} className="text-xs text-slate-400">Перейти в тред</a>
-                    )}
                   </div>
                 </div>
               );
