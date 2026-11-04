@@ -57,7 +57,7 @@ export default function Home() {
         </div>
 
         {/* Общие разделы */}
-        <div>
+        <div className="mb-10">
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 pb-1 inline-block text-slate-800">
             Общие разделы
           </h2>
@@ -79,6 +79,18 @@ export default function Home() {
               </a>
             </li>
           </ul>
+        </div>
+
+        {/* Тематические беседы (Новый раздел) */}
+        <div>
+          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 pb-1 inline-block text-slate-800">
+            Тематические беседы
+          </h2>
+          <div className="mt-4 bg-white p-5 rounded-lg border border-slate-200">
+            <p className="text-slate-500 text-[15px]">
+              Бесед пока нет. Если вы хотите добавить новый раздел или подать жалобу на нежелательный контент, пишите на официальную почту «Юрты»: <a href="mailto:officialyurta@gmail.com" className="text-blue-700 hover:text-teal-700 hover:underline font-medium">officialyurta@gmail.com</a>
+            </p>
+          </div>
         </div>
 
       </div>
