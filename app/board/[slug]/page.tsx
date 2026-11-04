@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-// Список смайлов для панели
 const EMOJIS = [
-  "ಠ_ಠ", "(╯°□°)╯︵ ┻━┻", "( ͡° ͜ʖ ͡°)", ":3", "(´・ω・`)", 
-  "ヽ(´ー｀)┌", "＼(＾▽＾)／", "¯\\_(ツ)_/¯", "(⌐■_■)", 
-  "(╥﹏╥)", "(☞ﾟヮﾟ)☞", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥", "ヽ(`Д´)ﾉ"
+  "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
+  "ヽ(´ー｀)┌", "＼(＾▽＾)／", "(⌐■_■)", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥",
+  "(´・ω・`)", "(╥﹏╥)", "ヽ(`Д´)ﾉ", "(╬ Ò﹏Ó)", "(ﾉಥ益ಥ）ﾉ",
+  "(っ °Д °;)っ", "┻━┻ ︵ヽ(`Д´)ﾉ︵﻿ ┻━┻", "(ಥ﹏ಥ)", "(T_T)", "( •̀ ω •́ )",
+  "(☞ﾟヮﾟ)☞", "(•_•) ( •_•)>⌐■-■", "༼ つ ◕_◕ ༽つ", "(• ε •)", "( ͠° ͟ʖ ͡°)",
+  "ᕕ( ᐛ )ᕗ", "( ͡~ ͜ʖ ͡°)", "ლ(ಠ益ಠლ)", "(ง ͠° ͟ل͜ ͡°)ง", "(´･ω･`)"
 ];
 
 export default function BoardPage({ params }: { params: { slug: string } }) {
@@ -18,10 +20,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
   
-  const [isAdmin, setIsAdmin] = useState(false);
   const [cooldown, setCooldown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
+  const [showEmojis, setShowEmojis] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -90,25 +92,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setLoading(false);
   };
 
-  const handleNicknameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setNickname(val);
-    setIsAdmin(val === 'yurta_admin_2024');
-  };
-
-  const handleDelete = async (postId: number) => {
-    if (!confirm("Удалить этот пост?")) return;
-    const { data, error } = await supabase.rpc('delete_post_admin', { p_id: postId, p_password: 'yurta_admin_2024' });
-    if (error || !data) alert("Ошибка удаления. Неверный пароль?");
-    else fetchPosts();
-  };
-
-  const handlePin = async (postId: number, currentStatus: boolean) => {
-    if (!confirm(currentStatus ? "Убрать из каталога?" : "Добавить в каталог?")) return;
-    const { error } = await supabase.from('posts').update({ is_pinned: !currentStatus }).eq('id', postId);
-    if (!error) fetchPosts();
-  };
-
   const compressImage = (file: File): Promise<File> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -134,28 +117,24 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const handleReplyClick = (post: any) => {
     setReplyTo(post);
-    formRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setActiveTab('board'); // Переключаем на доску, чтобы увидеть форму
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
   };
 
   const insertEmoji = (emoji: string) => {
     setContent(prev => prev + " " + emoji + " ");
   };
 
-  // Функция для подсветки смайлов в тексте
   const renderContent = (text: string) => {
     let formattedText = text;
-    
-    // Проходимся по каждому смайлу и оборачиваем его в синий span
     EMOJIS.forEach(emoji => {
-      // Используем split и join, чтобы заменить все вхождения (без regex)
       formattedText = formattedText.split(emoji).join(
         `<span class="text-blue-700 font-bold">${emoji}</span>`
       );
     });
-
-    // Заменяем переносы строк на <br/>
     formattedText = formattedText.replace(/\n/g, '<br/>');
-
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
 
@@ -163,8 +142,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const threads = posts.filter(p => !p.parent_id);
   
+  // Поиск
   const filteredThreads = threads.filter(t => {
-    if (activeTab === 'catalog' && !t.is_pinned) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return t.content.toLowerCase().includes(query) || (t.nickname && t.nickname.toLowerCase().includes(query));
@@ -178,15 +157,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     </svg>
   );
 
-  const PinIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-      <line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
-    </svg>
-  );
-
   const ImageIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
       <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+    </svg>
+  );
+
+  const SmileIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/>
     </svg>
   );
 
@@ -219,7 +198,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               onClick={() => setActiveTab('catalog')}
               className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded flex items-center justify-center gap-2 ${activeTab === 'catalog' ? 'bg-blue-100 text-blue-800' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              <PinIcon /> Каталог
+              Каталог
             </button>
           </div>
           
@@ -237,6 +216,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
 
+        {/* Форма (показывается только на вкладке "Доска") */}
         {activeTab === 'board' && (
           <div ref={formRef} className="bg-white rounded-lg border border-slate-200 shadow-sm mb-8 relative overflow-hidden">
             <div className="p-6">
@@ -250,31 +230,42 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               )}
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                
-                {/* Панель смайлов */}
-                <div className="flex flex-wrap gap-2 p-2 bg-slate-50 rounded border border-slate-200">
-                  {EMOJIS.map((emoji) => (
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
                     <button
-                      key={emoji}
                       type="button"
-                      onClick={() => insertEmoji(emoji)}
-                      className="text-sm text-slate-600 hover:text-blue-700 hover:bg-white px-2 py-1 rounded transition-colors font-mono"
-                      title="Вставить смайл"
+                      onClick={() => setShowEmojis(!showEmojis)}
+                      className="flex items-center gap-2 text-sm text-slate-600 hover:text-blue-700 font-medium transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200"
                     >
-                      {emoji}
+                      <SmileIcon />
+                      {showEmojis ? "Свернуть смайлы" : "Показать смайлы"}
                     </button>
-                  ))}
+                  </div>
+
+                  {showEmojis && (
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 p-3 bg-slate-50 rounded border border-slate-200 max-h-48 overflow-y-auto">
+                      {EMOJIS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => insertEmoji(emoji)}
+                          className="text-xs sm:text-sm text-slate-700 hover:text-blue-700 hover:bg-white px-1 py-2 rounded transition-colors font-mono flex items-center justify-center break-all"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <input 
                   type="text" 
                   placeholder="Твой ник (необязательно)" 
                   value={nickname}
-                  onChange={handleNicknameChange}
-                  className={`border rounded px-3 py-2 text-sm focus:outline-none ${
-                    isAdmin ? 'border-red-500 bg-red-50 text-red-900' : 'border-slate-300 focus:border-blue-500'
-                  }`}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
                 />
+                
                 <textarea 
                   placeholder="Текст сообщения..." 
                   value={content}
@@ -310,17 +301,53 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         )}
 
+        {/* Лента тредов */}
         <div className="flex flex-col gap-6">
           {filteredThreads.length === 0 ? (
             <div className="text-center text-slate-500 py-10 bg-white rounded-lg border border-slate-200">
-              {activeTab === 'catalog' ? "В каталоге пока пусто." : searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}
+              {searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}
             </div>
           ) : (
             filteredThreads.map((thread) => {
               const replies = getReplies(thread.id);
+              const lastReply = replies.length > 0 ? replies[replies.length - 1] : null;
+              
+              // --- РЕНДЕР ДЛЯ ВКЛАДКИ "КАТАЛОГ" ---
+              if (activeTab === 'catalog') {
+                return (
+                  <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 hover:border-blue-400 transition-colors">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-bold text-blue-700 text-sm">
+                            {thread.nickname || "Аноним"}
+                          </span>
+                          <span className="text-xs text-slate-400">№{thread.id}</span>
+                          <span className="text-xs text-slate-400 ml-auto sm:ml-0">Ответов: {replies.length}</span>
+                        </div>
+                        <h3 className="text-slate-800 font-medium line-clamp-2 mb-2">
+                          {thread.content}
+                        </h3>
+                        {lastReply && (
+                          <div className="text-xs text-slate-500 bg-slate-50 p-2 rounded border border-slate-100 line-clamp-1">
+                            <span className="font-bold text-slate-600">Последний ответ:</span> {lastReply.content}
+                          </div>
+                        )}
+                      </div>
+                      <button 
+                        onClick={() => handleReplyClick(thread)}
+                        className="shrink-0 bg-slate-100 hover:bg-blue-100 text-blue-700 text-sm font-medium py-1.5 px-4 rounded transition-colors"
+                      >
+                        Перейти
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // --- РЕНДЕР ДЛЯ ВКЛАДКИ "ДОСКА" ---
               return (
                 <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                  
                   <div className="p-5 border-b border-slate-100">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`font-bold ${thread.nickname ? 'text-blue-700' : 'text-slate-500'}`}>
@@ -330,19 +357,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         {new Date(thread.created_at).toLocaleString('ru-RU')}
                       </span>
                       <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
-                      
-                      {isAdmin && (
-                        <div className="flex gap-2 ml-2">
-                          <button onClick={() => handlePin(thread.id, thread.is_pinned)} className={`text-xs hover:underline ${thread.is_pinned ? 'text-orange-500' : 'text-slate-500'}`} title={thread.is_pinned ? "Открепить" : "Закрепить"}>
-                            <PinIcon />
-                          </button>
-                          <button onClick={() => handleDelete(thread.id)} className="text-xs text-red-500 hover:underline">
-                            [Удалить]
-                          </button>
-                        </div>
-                      )}
                     </div>
-                    {/* Используем renderContent для красивого вывода текста */}
                     <div className="text-slate-800 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                     
                     {thread.image_url && (
@@ -352,7 +367,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     )}
                   </div>
 
-                  {replies.length > 0 && activeTab === 'board' && (
+                  {replies.length > 0 && (
                     <div className="bg-white flex flex-col">
                       {replies.map((reply) => (
                         <div key={reply.id} className="p-4 border-t border-slate-100 ml-4 border-l-2 border-l-blue-200">
@@ -364,15 +379,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                               {new Date(reply.created_at).toLocaleString('ru-RU')}
                             </span>
                             <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
-                            
-                            {isAdmin && (
-                              <button onClick={() => handleDelete(reply.id)} className="text-xs text-red-500 hover:underline ml-2">
-                                [Удалить]
-                              </button>
-                            )}
                           </div>
                           <div className="text-slate-800 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                          
                           {reply.image_url && (
                             <div className="mt-2">
                               <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
