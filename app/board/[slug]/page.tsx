@@ -54,16 +54,22 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     let imageUrl = null;
     if (file) {
       const compressedFile = await compressImage(file);
-      const fileName = `${Date.now()}-${compressedFile.name}`;
+      
+      // Генерируем безопасное имя файла (только цифры и случайные буквы)
+      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
+      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('images')
-        .upload(fileName, compressedFile);
+        .upload(safeFileName, compressedFile, {
+          contentType: 'image/jpeg',
+          upsert: false
+        });
 
       if (!uploadError && uploadData) {
-        const { data: urlData } = supabase.storage.from('images').getPublicUrl(fileName);
+        const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
         imageUrl = urlData.publicUrl;
       } else {
-        alert("Ошибка при загрузке картинки: " + uploadError?.message);
+        alert("Ошибка при загрузке картинки: " + (uploadError?.message || "Неизвестная ошибка"));
         setLoading(false);
         return;
       }
@@ -106,13 +112,17 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.onload = () => {
           const canvas = document.createElement("canvas");
           const MAX_WIDTH = 800;
-          const scale = Math.min(1, MAX_WIDTH / img.width); // Не растягиваем маленькие картинки
+          const scale = Math.min(1, MAX_WIDTH / img.width); 
           canvas.width = img.width * scale;
           canvas.height = img.height * scale;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+          
           canvas.toBlob((blob) => {
-            if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
+            if (blob) {
+              // Принудительно делаем jpg и безопасное имя
+              resolve(new File([blob], "image.jpg", { type: 'image/jpeg' }));
+            }
           }, 'image/jpeg', 0.8);
         };
       };
