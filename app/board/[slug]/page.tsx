@@ -62,6 +62,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       if (!uploadError && uploadData) {
         const { data: urlData } = supabase.storage.from('images').getPublicUrl(fileName);
         imageUrl = urlData.publicUrl;
+      } else {
+        alert("Ошибка при загрузке картинки: " + uploadError?.message);
+        setLoading(false);
+        return;
       }
     }
 
@@ -102,13 +106,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.onload = () => {
           const canvas = document.createElement("canvas");
           const MAX_WIDTH = 800;
-          const scale = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
+          const scale = Math.min(1, MAX_WIDTH / img.width); // Не растягиваем маленькие картинки
+          canvas.width = img.width * scale;
           canvas.height = img.height * scale;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
           canvas.toBlob((blob) => {
-            if (blob) resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            if (blob) resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", { type: 'image/jpeg' }));
           }, 'image/jpeg', 0.8);
         };
       };
@@ -117,7 +121,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const handleReplyClick = (post: any) => {
     setReplyTo(post);
-    setActiveTab('board'); // Переключаем на доску, чтобы увидеть форму
+    setActiveTab('board');
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -142,7 +146,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const threads = posts.filter(p => !p.parent_id);
   
-  // Поиск
   const filteredThreads = threads.filter(t => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -216,7 +219,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
 
-        {/* Форма (показывается только на вкладке "Доска") */}
         {activeTab === 'board' && (
           <div ref={formRef} className="bg-white rounded-lg border border-slate-200 shadow-sm mb-8 relative overflow-hidden">
             <div className="p-6">
@@ -301,7 +303,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         )}
 
-        {/* Лента тредов */}
         <div className="flex flex-col gap-6">
           {filteredThreads.length === 0 ? (
             <div className="text-center text-slate-500 py-10 bg-white rounded-lg border border-slate-200">
@@ -312,7 +313,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               const replies = getReplies(thread.id);
               const lastReply = replies.length > 0 ? replies[replies.length - 1] : null;
               
-              // --- РЕНДЕР ДЛЯ ВКЛАДКИ "КАТАЛОГ" ---
               if (activeTab === 'catalog') {
                 return (
                   <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 hover:border-blue-400 transition-colors">
@@ -345,7 +345,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 );
               }
 
-              // --- РЕНДЕР ДЛЯ ВКЛАДКИ "ДОСКА" ---
               return (
                 <div key={thread.id} className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                   <div className="p-5 border-b border-slate-100">
@@ -362,7 +361,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     
                     {thread.image_url && (
                       <div className="mt-3">
-                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" />
+                        <img 
+                          src={thread.image_url} 
+                          alt="img" 
+                          className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 object-contain" 
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки';
+                          }}
+                        />
                       </div>
                     )}
                   </div>
@@ -383,7 +389,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                           <div className="text-slate-800 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
                           {reply.image_url && (
                             <div className="mt-2">
-                              <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" />
+                              <img 
+                                src={reply.image_url} 
+                                alt="img" 
+                                className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 object-contain" 
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки';
+                                }}
+                              />
                             </div>
                           )}
                         </div>
