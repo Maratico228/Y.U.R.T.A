@@ -111,7 +111,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 800;
+          const MAX_WIDTH = 600;
           const scale = Math.min(1, MAX_WIDTH / img.width); 
           canvas.width = img.width * scale;
           canvas.height = img.height * scale;
@@ -123,7 +123,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               // Принудительно делаем jpg и безопасное имя
               resolve(new File([blob], "image.jpg", { type: 'image/jpeg' }));
             }
-          }, 'image/jpeg', 0.8);
+          }, 'image/jpeg', 0.7);
         };
       };
     });
