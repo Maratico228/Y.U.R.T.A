@@ -27,9 +27,26 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const formRef = useRef<HTMLDivElement>(null);
 
-  const boardName = params.slug === 'general' ? 'Общая беседа' 
-                  : params.slug === 'flood' ? 'Раздел бред' 
-                  : `Доска: ${params.slug}`;
+  // --- СЛОВАРЬ ДЛЯ ЗАГОЛОВКОВ И ОПИСАНИЙ ---
+  const boardInfo: Record<string, { name: string, description: string }> = {
+    humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
+    engineering: { name: "Инженерная школа", description: "Беседа Инженерной школы цифровых технологий." },
+    education: { name: "Образовательный инжиниринг", description: "Беседа Центра образовательного инжиниринга." },
+    sport: { name: "Физкультура и спорт", description: "Беседа Высшей школы физической культуры и спорта." },
+    ecology: { name: "Экологическая школа", description: "Беседа Высшей экологической школы." },
+    economy: { name: "Цифровая экономика", description: "Беседа Высшей школы цифровой экономики." },
+    oil: { name: "Нефтяная школа", description: "Беседа Высшей нефтяной школы." },
+    law: { name: "Школа права", description: "Беседа Высшей школы права." },
+    polytech: { name: "Политехническая школа", description: "Беседа Политехнической школы." },
+    general: { name: "Общая беседа", description: "Общая беседа без определенной тематики." },
+    flood: { name: "Бред", description: "Раздел \"Бред\". Беседа с минимальным уровнем цензуры и без определенной тематики. Веселитесь и общайтесь о чём угодно!" },
+  };
+
+  // Если раздела нет в словаре, используем дефолтные значения
+  const currentBoard = boardInfo[params.slug] || { 
+    name: params.slug, 
+    description: `Беседа в разделе /${params.slug}/.` 
+  };
 
   useEffect(() => {
     fetchPosts();
@@ -55,7 +72,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (file) {
       const compressedFile = await compressImage(file);
       
-      // Генерируем безопасное имя файла (только цифры и случайные буквы)
       const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -111,7 +127,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 600;
+          const MAX_WIDTH = 600; // Уменьшили для стабильности
           const scale = Math.min(1, MAX_WIDTH / img.width); 
           canvas.width = img.width * scale;
           canvas.height = img.height * scale;
@@ -120,10 +136,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           
           canvas.toBlob((blob) => {
             if (blob) {
-              // Принудительно делаем jpg и безопасное имя
               resolve(new File([blob], "image.jpg", { type: 'image/jpeg' }));
             }
-          }, 'image/jpeg', 0.7);
+          }, 'image/jpeg', 0.7); // Качество 70%
         };
       };
     });
@@ -196,7 +211,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       <div className="max-w-3xl mx-auto px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2 uppercase">/{params.slug}/</h1>
-          <p className="text-slate-500">{boardName}</p>
+          <h2 className="text-xl font-bold text-blue-800 mb-1">{currentBoard.name}</h2>
+          <p className="text-slate-500">{currentBoard.description}</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white p-2 rounded-lg border border-slate-200">
