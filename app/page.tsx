@@ -34,7 +34,17 @@ export default function Home() {
         />
       </div>
 
-      {/* 3. Основной контент */}
+      {/* 3. Плашка с извинениями */}
+      <div className="max-w-3xl mx-auto px-4 w-full mb-10">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 shadow-sm text-center">
+          <h3 className="text-amber-800 font-bold text-lg mb-2">ПРИНОШУ СВОИ ИЗВИНЕНИЯ.</h3>
+          <p className="text-amber-700 text-sm sm:text-base leading-relaxed">
+            Из-за взлома "Юрты" все, ныне существующие посты было необходимо удалить. Сейчас сайт функционирует нормально. Приятного общения!
+          </p>
+        </div>
+      </div>
+
+      {/* 4. Основной контент */}
       <div className="max-w-5xl mx-auto px-4 flex-grow w-full">
         
         {/* Список школ */}
@@ -81,7 +91,7 @@ export default function Home() {
           </ul>
         </div>
 
-        {/* Тематические беседы (Новый раздел) */}
+        {/* Тематические беседы */}
         <div>
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 pb-1 inline-block text-slate-800">
             Тематические беседы
@@ -95,7 +105,7 @@ export default function Home() {
 
       </div>
 
-      {/* 4. Подвал с описанием */}
+      {/* 5. Подвал с описанием */}
       <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200">
         <p className="text-sm text-slate-400 leading-relaxed text-center">
           Y.U.R.T.A - это особый веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
