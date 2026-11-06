@@ -3,6 +3,6 @@
 @tailwind utilities;
 
 body {
-  background-color: #f8fafc; /* Светло-серый фон */
-  color: #0f172a; /* Тёмно-синий текст */
+  background-color: #f8fafc;
+  color: #0f172a;
 }
