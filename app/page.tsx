@@ -6,7 +6,6 @@ export default function Home() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Синхронизируем состояние кнопки с тем, что поставил скрипт в layout.tsx
     setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
@@ -69,6 +68,21 @@ export default function Home() {
         />
       </div>
 
+      {/* НОВАЯ ПЛАШКА ЗДЕСЬ */}
+      <div className="max-w-5xl mx-auto px-4 w-full mb-8">
+        <div className="bg-blue-600 dark:bg-blue-700 text-white p-4 rounded-lg shadow-md text-center">
+          <p className="text-sm md:text-base font-bold uppercase tracking-wide mb-1">
+            По многочисленным просьбам
+          </p>
+          <p className="text-sm md:text-base mb-2">
+            Тёмная версия «Юрты» доступна. Нажмите на иконку луны в правом верхнем углу.
+          </p>
+          <p className="text-xs text-blue-100">
+            Идеи для сайта и тематических разделов присылать на почту: <a href="mailto:officialyurta@gmail.com" className="underline hover:text-white">officialyurta@gmail.com</a>
+          </p>
+        </div>
+      </div>
+
       <div className="max-w-5xl mx-auto px-4 flex-grow w-full">
         <div className="mb-10">
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
@@ -117,7 +131,7 @@ export default function Home() {
 
       <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200 dark:border-slate-700">
         <p className="text-sm text-slate-400 dark:text-slate-500 leading-relaxed text-center">
-          Y.U.R.T.A - это особый веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
+          Y.U.R.T.A - это неофициальный веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
         </p>
       </footer>
     </main>
