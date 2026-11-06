@@ -49,24 +49,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   useEffect(() => {
-    // Отключаем анимацию при загрузке
-    document.documentElement.style.setProperty('transition', 'none');
-
-    if (localStorage.getItem("theme") === "dark") {
-      setIsDark(true);
-      document.documentElement.classList.add("dark");
-    } else {
-      setIsDark(false);
-      document.documentElement.classList.remove("dark");
-    }
-
-    // Возвращаем анимацию
-    const timer = setTimeout(() => {
-      document.documentElement.style.removeProperty('transition');
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
+    // Синхронизируем кнопку
+    setIsDark(document.documentElement.classList.contains("dark"));
+    fetchPosts();
+  }, [params.slug]);
 
   const toggleTheme = () => {
     if (isDark) {
@@ -79,10 +65,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setIsDark(true);
     }
   };
-
-  useEffect(() => {
-    fetchPosts();
-  }, [params.slug]);
 
   const fetchPosts = async () => {
     const { data } = await supabase
@@ -238,7 +220,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">На главную</a>
             <button 
               onClick={toggleTheme}
-              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
             >
               {isDark ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
@@ -259,18 +241,18 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
           <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded transition-colors ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Доска</button>
-            <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded transition-colors ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Каталог</button>
+            <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Доска</button>
+            <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Каталог</button>
           </div>
           
           <div className="relative w-full sm:w-64">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon /></div>
-            <input type="text" placeholder="Поиск по тредам..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 bg-transparent rounded pl-10 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500 transition-colors" />
+            <input type="text" placeholder="Поиск по тредам..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 bg-transparent rounded pl-10 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500" />
           </div>
         </div>
 
         {activeTab === 'board' && (
-          <div ref={formRef} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm mb-8 relative overflow-hidden transition-colors">
+          <div ref={formRef} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm mb-8 relative overflow-hidden">
             <div className="p-6">
               <h2 className="text-lg font-bold mb-4 dark:text-slate-100">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
               {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить ответ</button>}
@@ -278,14 +260,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center">
-                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium transition-colors bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600">
+                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600">
                       <SmileIcon /> {showEmojis ? "Свернуть смайлы" : "Показать смайлы"}
                     </button>
                   </div>
                   {showEmojis && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto transition-colors">
+                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
                       {EMOJIS.map((emoji) => (
-                        <button key={emoji} type="button" onClick={() => insertEmoji(emoji)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded transition-colors font-mono flex items-center justify-center break-all">{emoji}</button>
+                        <button key={emoji} type="button" onClick={() => insertEmoji(emoji)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded font-mono flex items-center justify-center break-all">{emoji}</button>
                       ))}
                     </div>
                   )}
@@ -296,17 +278,17 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   placeholder="Твой ник (необязательно)" 
                   value={nickname} 
                   onChange={handleNicknameChange} 
-                  className={`border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none transition-colors ${isAdmin ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'}`} 
+                  className={`border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none ${isAdmin ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'}`} 
                 />
                 
-                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono transition-colors" required></textarea>
+                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-                  <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-600 flex items-center gap-2 transition-colors">
+                  <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-600 flex items-center gap-2">
                     <ImageIcon /> <span>{file ? file.name : "Прикрепить картинку"}</span>
                     <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
                   </label>
-                  <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded transition-colors w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
+                  <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
                     {loading ? "Отправка..." : cooldown ? "Ждите 30 сек..." : "Отправить"}
                   </button>
                 </div>
@@ -325,7 +307,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               
               if (activeTab === 'catalog') {
                 return (
-                  <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-4 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+                  <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-4 hover:border-blue-400 dark:hover:border-blue-500">
                     <div className="flex justify-between items-start gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -340,14 +322,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                           </div>
                         )}
                       </div>
-                      <button onClick={() => handleReplyClick(thread)} className="shrink-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-slate-600 text-blue-700 dark:text-blue-400 text-sm font-medium py-1.5 px-4 rounded transition-colors">Перейти</button>
+                      <button onClick={() => handleReplyClick(thread)} className="shrink-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-slate-600 text-blue-700 dark:text-blue-400 text-sm font-medium py-1.5 px-4 rounded">Перейти</button>
                     </div>
                   </div>
                 );
               }
 
               return (
-                <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col transition-colors">
+                <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
                   <div className="p-5 border-b border-slate-100 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
@@ -367,7 +349,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   </div>
 
                   {replies.length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 flex flex-col transition-colors">
+                    <div className="bg-white dark:bg-slate-800 flex flex-col">
                       {replies.map((reply) => (
                         <div key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
                           <div className="flex items-center gap-2 mb-1">
@@ -390,7 +372,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     </div>
                   )}
 
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between transition-colors">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
                     <button onClick={() => handleReplyClick(thread)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
                   </div>
                 </div>
