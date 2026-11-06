@@ -25,8 +25,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
   const [showEmojis, setShowEmojis] = useState(false);
-
-  // Состояние темы
   const [isDark, setIsDark] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -50,8 +48,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     description: `Беседа в разделе /${params.slug}/.` 
   };
 
-  // Инициализация темы
   useEffect(() => {
+    // Отключаем анимацию при загрузке
+    document.documentElement.style.setProperty('transition', 'none');
+
     if (localStorage.getItem("theme") === "dark") {
       setIsDark(true);
       document.documentElement.classList.add("dark");
@@ -59,6 +59,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setIsDark(false);
       document.documentElement.classList.remove("dark");
     }
+
+    // Возвращаем анимацию
+    const timer = setTimeout(() => {
+      document.documentElement.style.removeProperty('transition');
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const toggleTheme = () => {
@@ -209,7 +216,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return true;
   });
 
-  // SVG Иконки
   const SearchIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-slate-400 dark:text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
   );
@@ -221,20 +227,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans transition-colors duration-300">
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm mb-8 transition-colors duration-300">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm mb-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/">
-            <img 
-              src="/logo.png" 
-              alt="Logo" 
-              style={{ height: '48px', width: 'auto' }} 
-              className="dark:brightness-0 dark:invert transition-all duration-300"
-            />
+            <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
           </a>
           
           <div className="flex items-center gap-4">
-            <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium transition-colors">На главную</a>
+            <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">На главную</a>
             <button 
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
@@ -251,12 +252,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
       <div className="max-w-3xl mx-auto px-4">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 uppercase transition-colors">/{params.slug}/</h1>
-          <h2 className="text-xl font-bold text-blue-800 dark:text-blue-400 mb-1 transition-colors">{currentBoard.name}</h2>
-          <p className="text-slate-500 dark:text-slate-400 transition-colors">{currentBoard.description}</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 uppercase">/{params.slug}/</h1>
+          <h2 className="text-xl font-bold text-blue-800 dark:text-blue-400 mb-1">{currentBoard.name}</h2>
+          <p className="text-slate-500 dark:text-slate-400">{currentBoard.description}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
           <div className="flex gap-2 w-full sm:w-auto">
             <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded transition-colors ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Доска</button>
             <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded transition-colors ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Каталог</button>
@@ -271,7 +272,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         {activeTab === 'board' && (
           <div ref={formRef} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm mb-8 relative overflow-hidden transition-colors">
             <div className="p-6">
-              <h2 className="text-lg font-bold mb-4 dark:text-slate-100 transition-colors">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
+              <h2 className="text-lg font-bold mb-4 dark:text-slate-100">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
               {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить ответ</button>}
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -316,7 +317,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
         <div className="flex flex-col gap-6">
           {filteredThreads.length === 0 ? (
-            <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors">{searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}</div>
+            <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">{searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}</div>
           ) : (
             filteredThreads.map((thread) => {
               const replies = getReplies(thread.id);
@@ -360,44 +361,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                     {thread.image_url && (
                       <div className="mt-3">
-                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
-                      </div>
-                    )}
-                  </div>
-
-                  {replies.length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 flex flex-col transition-colors">
-                      {replies.map((reply) => (
-                        <div key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900 transition-colors">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
-                            <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
-                            <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
-                            
-                            {isAdmin && (
-                              <button onClick={() => handleDelete(reply.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
-                            )}
-                          </div>
-                          <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                          {reply.image_url && (
-                            <div className="mt-2">
-                              <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between transition-colors">
-                    <button onClick={() => handleReplyClick(thread)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium transition-colors">Ответить в тред</button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    </main>
-  );
-}
+                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via
