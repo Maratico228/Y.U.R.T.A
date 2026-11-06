@@ -6,22 +6,8 @@ export default function Home() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    // Отключаем анимацию при загрузке страницы
-    document.documentElement.style.setProperty('transition', 'none');
-    
-    if (localStorage.getItem("theme") === "dark") {
-      setIsDark(true);
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-
-    // Возвращаем анимацию обратно через 100мс
-    const timer = setTimeout(() => {
-      document.documentElement.style.removeProperty('transition');
-    }, 100);
-
-    return () => clearTimeout(timer);
+    // Синхронизируем состояние кнопки с тем, что поставил скрипт в layout.tsx
+    setIsDark(document.documentElement.classList.contains("dark"));
   }, []);
 
   const toggleTheme = () => {
@@ -51,7 +37,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans flex flex-col">
       
-      {/* 1. Шапка */}
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <img 
@@ -63,7 +48,7 @@ export default function Home() {
           
           <button 
             onClick={toggleTheme}
-            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
             title={isDark ? "Включить светлую тему" : "Включить темную тему"}
           >
             {isDark ? (
@@ -75,7 +60,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 2. Заглавный текст */}
       <div className="max-w-5xl mx-auto px-4 py-8 flex justify-center">
         <img 
           src="/title.png" 
@@ -85,10 +69,7 @@ export default function Home() {
         />
       </div>
 
-      {/* 3. Основной контент */}
       <div className="max-w-5xl mx-auto px-4 flex-grow w-full">
-        
-        {/* Список школ */}
         <div className="mb-10">
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Доски Высших школ
@@ -96,10 +77,7 @@ export default function Home() {
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             {schools.map((school) => (
               <li key={school.slug}>
-                <a 
-                  href={`/board/${school.slug}`}
-                  className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors duration-200 text-[16px] font-medium block"
-                >
+                <a href={`/board/${school.slug}`} className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                   /{school.slug}/ — {school.name}
                 </a>
               </li>
@@ -107,32 +85,24 @@ export default function Home() {
           </ul>
         </div>
 
-        {/* Общие разделы */}
         <div className="mb-10">
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Общие разделы
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             <li>
-              <a 
-                href="/board/general" 
-                className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors duration-200 text-[16px] font-medium block"
-              >
+              <a href="/board/general" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                 /general/ — Общая беседа
               </a>
             </li>
             <li>
-              <a 
-                href="/board/flood" 
-                className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 transition-colors duration-200 text-[16px] font-medium block"
-              >
+              <a href="/board/flood" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                 /flood/ — Раздел бред
               </a>
             </li>
           </ul>
         </div>
 
-        {/* Тематические беседы */}
         <div>
           <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Тематические беседы
@@ -143,16 +113,13 @@ export default function Home() {
             </p>
           </div>
         </div>
-
       </div>
 
-      {/* 4. Подвал */}
       <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200 dark:border-slate-700">
         <p className="text-sm text-slate-400 dark:text-slate-500 leading-relaxed text-center">
           Y.U.R.T.A - это особый веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
         </p>
       </footer>
-
     </main>
   );
 }
