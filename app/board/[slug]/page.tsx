@@ -361,4 +361,44 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                     {thread.image_url && (
                       <div className="mt-3">
-                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via
+                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {replies.length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 flex flex-col transition-colors">
+                      {replies.map((reply) => (
+                        <div key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
+                            
+                            {isAdmin && (
+                              <button onClick={() => handleDelete(reply.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
+                            )}
+                          </div>
+                          <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
+                          {reply.image_url && (
+                            <div className="mt-2">
+                              <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between transition-colors">
+                    <button onClick={() => handleReplyClick(thread)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
