@@ -6,12 +6,22 @@ export default function Home() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
+    // Отключаем анимацию при загрузке страницы
+    document.documentElement.style.setProperty('transition', 'none');
+    
     if (localStorage.getItem("theme") === "dark") {
       setIsDark(true);
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
+
+    // Возвращаем анимацию обратно через 100мс
+    const timer = setTimeout(() => {
+      document.documentElement.style.removeProperty('transition');
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const toggleTheme = () => {
@@ -39,17 +49,16 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans flex flex-col transition-colors duration-300">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans flex flex-col">
       
-      {/* 1. Шапка с логотипом и переключателем темы */}
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm transition-colors duration-300">
+      {/* 1. Шапка */}
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <img 
             src="/logo.png" 
             alt="Логотип Y.U.R.T.A" 
             style={{ height: '48px', width: 'auto', objectFit: 'contain' }}
-            className="dark:brightness-0 dark:invert transition-all duration-300" 
-
+            className="dark:brightness-0 dark:invert" 
           />
           
           <button 
@@ -72,7 +81,7 @@ export default function Home() {
           src="/title.png" 
           alt="Заглавный текст" 
           style={{ maxWidth: '400px', maxHeight: '150px', objectFit: 'contain' }} 
-          className="dark:brightness-0 dark:invert transition-all duration-300"
+          className="dark:brightness-0 dark:invert"
         />
       </div>
 
@@ -81,7 +90,7 @@ export default function Home() {
         
         {/* Список школ */}
         <div className="mb-10">
-          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200 transition-colors duration-300">
+          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Доски Высших школ
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
@@ -100,7 +109,7 @@ export default function Home() {
 
         {/* Общие разделы */}
         <div className="mb-10">
-          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200 transition-colors duration-300">
+          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Общие разделы
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
@@ -125,12 +134,12 @@ export default function Home() {
 
         {/* Тематические беседы */}
         <div>
-          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200 transition-colors duration-300">
+          <h2 className="text-lg font-bold mb-3 border-b-2 border-slate-300 dark:border-slate-600 pb-1 inline-block text-slate-800 dark:text-slate-200">
             Тематические беседы
           </h2>
-          <div className="mt-4 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700 transition-colors duration-300">
+          <div className="mt-4 bg-white dark:bg-slate-800 p-5 rounded-lg border border-slate-200 dark:border-slate-700">
             <p className="text-slate-500 dark:text-slate-400 text-[15px]">
-              Бесед пока нет. Если вы хотите добавить новый раздел или подать жалобу на нежелательный контент, пишите на официальную почту «Юрты»: <a href="mailto:officialyurta@gmail.com" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 hover:underline font-medium transition-colors">officialyurta@gmail.com</a>
+              Бесед пока нет. Если вы хотите добавить новый раздел или подать жалобу на нежелательный контент, пишите на официальную почту «Юрты»: <a href="mailto:officialyurta@gmail.com" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 hover:underline font-medium">officialyurta@gmail.com</a>
             </p>
           </div>
         </div>
@@ -138,8 +147,8 @@ export default function Home() {
       </div>
 
       {/* 4. Подвал */}
-      <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200 dark:border-slate-700 transition-colors duration-300">
-        <p className="text-sm text-slate-400 dark:text-slate-500 leading-relaxed text-center transition-colors duration-300">
+      <footer className="max-w-5xl mx-auto px-4 w-full mt-16 pt-8 border-t border-slate-200 dark:border-slate-700">
+        <p className="text-sm text-slate-400 dark:text-slate-500 leading-relaxed text-center">
           Y.U.R.T.A - это особый веб-форум Югорского Государственного Университета, где вы можете анонимно обмениваться сообщениями, картинками и свежей информацией. Будьте вежливы и благоразумны, а за анархией и весельем заходите в раздел "бред" :З
         </p>
       </footer>
