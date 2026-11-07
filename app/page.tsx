@@ -1,12 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 export default function Home() {
   const [isDark, setIsDark] = useState(false);
+  
+  // Состояния для счетчиков постов
+  const [generalCount, setGeneralCount] = useState<number | null>(null);
+  const [floodCount, setFloodCount] = useState<number | null>(null);
 
   useEffect(() => {
+    // Синхронизация темы
     setIsDark(document.documentElement.classList.contains("dark"));
+
+    // Загружаем счетчики постов для Общей беседы и Бреда
+    const fetchCounts = async () => {
+      // Считаем посты в /general/
+      const { count: gCount } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('board_slug', 'general');
+      
+      // Считаем посты в /flood/
+      const { count: fCount } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('board_slug', 'flood');
+
+      if (gCount !== null) setGeneralCount(gCount);
+      if (fCount !== null) setFloodCount(fCount);
+    };
+
+    fetchCounts();
   }, []);
 
   const toggleTheme = () => {
@@ -68,18 +94,16 @@ export default function Home() {
         />
       </div>
 
-      {/* НОВАЯ ПЛАШКА ЗДЕСЬ */}
+      {/* МЕСТО ДЛЯ ТВОЕЙ ГИФКИ С ОБНОВЛЕНИЯМИ */}
       <div className="max-w-5xl mx-auto px-4 w-full mb-8">
-        <div className="bg-blue-600 dark:bg-blue-700 text-white p-4 rounded-lg shadow-md text-center">
-          <p className="text-sm md:text-base font-bold uppercase tracking-wide mb-1">
-            По многочисленным просьбам
-          </p>
-          <p className="text-sm md:text-base mb-2">
-            Тёмная версия «Юрты» доступна. Нажмите на иконку луны в правом верхнем углу.
-          </p>
-          <p className="text-xs text-blue-100">
-            Идеи для сайта и тематических разделов присылать на почту: <a href="mailto:officialyurta@gmail.com" className="underline hover:text-white">officialyurta@gmail.com</a>
-          </p>
+        <div className="w-full flex justify-center">
+          <img 
+            src="/banner.gif" 
+            alt="Обновления Юрты" 
+            className="rounded-lg shadow-sm w-full max-w-4xl object-cover"
+            // Если гифки нет, картинка не сломается, просто не покажется
+            onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+          />
         </div>
       </div>
 
@@ -106,12 +130,14 @@ export default function Home() {
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 mt-4">
             <li>
               <a href="/board/general" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
-                /general/ — Общая беседа
+                /general/ — Общая беседа 
+                {generalCount !== null && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{generalCount}]</span>}
               </a>
             </li>
             <li>
               <a href="/board/flood" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
-                /flood/ — Раздел бред
+                /flood/ — Раздел бред 
+                {floodCount !== null && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{floodCount}]</span>}
               </a>
             </li>
           </ul>
