@@ -3,13 +3,18 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
-const EMOJIS = [
+const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
   "ヽ(´ー｀)┌", "＼(＾▽＾)／", "(⌐■_■)", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥",
   "(´・ω・`)", "(╥﹏╥)", "ヽ(`Д´)ﾉ", "(╬ Ò﹏Ó)", "(ﾉಥ益ಥ）ﾉ",
   "(っ °Д °;)っ", "┻━┻ ︵ヽ(`Д´)ﾉ︵﻿ ┻━┻", "(ಥ﹏ಥ)", "(T_T)", "( •̀ ω •́ )",
   "(☞ﾟヮﾟ)☞", "(•_•) ( •_•)>⌐■-■", "༼ つ ◕_◕ ༽つ", "(• ε •)", "( ͠° ͟ʖ ͡°)",
   "ᕕ( ᐛ )ᕗ", "( ͡~ ͜ʖ ͡°)", "ლ(ಠ益ಠლ)", "(ง ͠° ͟ل͜ ͡°)ง", "(´･ω･`)"
+];
+
+const PNG_EMOJIS = [
+  "smile", "heart", "fire", "sad", "lightning", 
+  "laugh", "cry", "cool", "angry", "think"
 ];
 
 export default function BoardPage({ params }: { params: { slug: string } }) {
@@ -26,6 +31,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
   const [showEmojis, setShowEmojis] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -49,9 +55,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   useEffect(() => {
-    // Синхронизируем кнопку
     setIsDark(document.documentElement.classList.contains("dark"));
     fetchPosts();
+
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [params.slug]);
 
   const toggleTheme = () => {
@@ -164,26 +175,60 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  const handleReplyClick = (post: any) => {
-    setReplyTo(post);
+  const handleReplyClick = (postId: number) => {
+    setReplyTo({ id: postId });
     setActiveTab('board');
+    setContent(prev => `>>${postId}\n${prev}`);
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
   };
 
-  const insertEmoji = (emoji: string) => {
-    setContent(prev => prev + " " + emoji + " ");
+  const scrollToPost = (postId: number) => {
+    setActiveTab('board');
+    setTimeout(() => {
+      const el = document.getElementById(`post-${postId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000);
+      }
+    }, 100);
+  };
+
+  const insertEmoji = (emoji: string, isPng: boolean = false) => {
+    if (isPng) {
+      setContent(prev => prev + ` :${emoji}: `);
+    } else {
+      setContent(prev => prev + " " + emoji + " ");
+    }
   };
 
   const renderContent = (text: string) => {
     let formattedText = text;
-    EMOJIS.forEach(emoji => {
-      formattedText = formattedText.split(emoji).join(
-        `<span class="text-blue-700 dark:text-blue-400 font-bold">${emoji}</span>`
+
+    // 1. Обратные ссылки (>>123)
+    formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
+      return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); document.getElementById('post-${id}')?.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'); setTimeout(() => document.getElementById('post-${id}')?.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+    });
+
+    // 2. Текстовые смайлы (синие)
+    TEXT_EMOJIS.forEach(emoji => {
+      const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+      const regex = new RegExp(safeEmoji, 'g');
+      formattedText = formattedText.replace(regex, `<span class="text-blue-700 dark:text-blue-400 font-bold">${emoji}</span>`);
+    });
+
+    // 3. PNG смайлы (:smile:)
+    PNG_EMOJIS.forEach(name => {
+      formattedText = formattedText.split(`:${name}:`).join(
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" />`
       );
     });
+
+    // 4. Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
+    
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
 
@@ -207,9 +252,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const SmileIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>
   );
+  const ArrowUpIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+  );
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm mb-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/">
@@ -218,10 +266,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           
           <div className="flex items-center gap-4">
             <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">На главную</a>
-            <button 
-              onClick={toggleTheme}
-              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-            >
+            <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
               {isDark ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
               ) : (
@@ -265,10 +310,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     </button>
                   </div>
                   {showEmojis && (
-                    <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700 max-h-48 overflow-y-auto">
-                      {EMOJIS.map((emoji) => (
-                        <button key={emoji} type="button" onClick={() => insertEmoji(emoji)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded font-mono flex items-center justify-center break-all">{emoji}</button>
-                      ))}
+                    <div className="flex flex-col gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                      <div>
+                        <p className="text-xs text-slate-400 mb-1">Текстовые (синие):</p>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 max-h-32 overflow-y-auto">
+                          {TEXT_EMOJIS.map((emoji) => (
+                            <button key={emoji} type="button" onClick={() => insertEmoji(emoji, false)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded font-mono flex items-center justify-center break-all">{emoji}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                        <p className="text-xs text-slate-400 mb-1">Картинки (PNG):</p>
+                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                          {PNG_EMOJIS.map((name) => (
+                            <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
+                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -322,19 +382,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                           </div>
                         )}
                       </div>
-                      <button onClick={() => handleReplyClick(thread)} className="shrink-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-slate-600 text-blue-700 dark:text-blue-400 text-sm font-medium py-1.5 px-4 rounded">Перейти</button>
+                      <button onClick={() => scrollToPost(thread.id)} className="shrink-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-slate-600 text-blue-700 dark:text-blue-400 text-sm font-medium py-1.5 px-4 rounded">Перейти</button>
                     </div>
                   </div>
                 );
               }
 
               return (
-                <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col">
+                <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
                   <div className="p-5 border-b border-slate-100 dark:border-slate-700">
                     <div className="flex items-center gap-2 mb-2">
                       <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
                       <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
                       <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
                       
                       {isAdmin && (
                         <button onClick={() => handleDelete(thread.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
@@ -351,7 +412,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   {replies.length > 0 && (
                     <div className="bg-white dark:bg-slate-800 flex flex-col">
                       {replies.map((reply) => (
-                        <div key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
+                        <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
                           <div className="flex items-center gap-2 mb-1">
                             <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
                             <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
@@ -367,13 +428,16 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                               <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
                             </div>
                           )}
+                          <div className="mt-2 flex justify-end">
+                            <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
 
                   <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    <button onClick={() => handleReplyClick(thread)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
+                    <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
                   </div>
                 </div>
               );
@@ -381,6 +445,16 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           )}
         </div>
       </div>
+
+      {/* Плавающая кнопка вверх */}
+      {showScrollTop && (
+        <button 
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 p-3 bg-blue-700 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all z-50"
+        >
+          <ArrowUpIcon />
+        </button>
+      )}
     </main>
   );
 }
