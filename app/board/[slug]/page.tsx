@@ -58,9 +58,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setIsDark(document.documentElement.classList.contains("dark"));
     fetchPosts();
 
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 500);
-    };
+    const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, [params.slug]);
@@ -78,12 +76,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const fetchPosts = async () => {
-    const { data } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('board_slug', params.slug)
-      .order('bumped_at', { ascending: false });
-    
+    const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
     if (data) setPosts(data);
   };
 
@@ -110,11 +103,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (file) {
       const compressedFile = await compressImage(file);
       const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
-      
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(safeFileName, compressedFile, { contentType: 'image/jpeg', upsert: false });
-
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(safeFileName, compressedFile, { contentType: 'image/jpeg', upsert: false });
       if (!uploadError && uploadData) {
         const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
         imageUrl = urlData.publicUrl;
@@ -125,14 +114,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    const newPost = {
-      board_slug: params.slug,
-      nickname: nickname.trim() || null,
-      content: content.trim(),
-      image_url: imageUrl,
-      parent_id: replyTo ? replyTo.id : null,
-    };
-
+    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null };
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
@@ -140,12 +122,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         const rootId = replyTo.parent_id || replyTo.id;
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
-      setContent("");
-      setFile(null);
-      setReplyTo(null);
-      fetchPosts();
-      setCooldown(true);
-      setTimeout(() => setCooldown(false), 30000);
+      setContent(""); setFile(null); setReplyTo(null); fetchPosts();
+      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
     } else {
       alert("Ошибка при отправке: " + error.message);
     }
@@ -163,13 +141,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           const canvas = document.createElement("canvas");
           const MAX_WIDTH = 600; 
           const scale = Math.min(1, MAX_WIDTH / img.width); 
-          canvas.width = img.width * scale;
-          canvas.height = img.height * scale;
+          canvas.width = img.width * scale; canvas.height = img.height * scale;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => {
-            if (blob) resolve(new File([blob], "image.jpg", { type: 'image/jpeg' }));
-          }, 'image/jpeg', 0.7);
+          canvas.toBlob((blob) => { if (blob) resolve(new File([blob], "image.jpg", { type: 'image/jpeg' })); }, 'image/jpeg', 0.7);
         };
       };
     });
@@ -179,9 +154,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setReplyTo({ id: postId });
     setActiveTab('board');
     setContent(prev => `>>${postId}\n${prev}`);
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
   const scrollToPost = (postId: number) => {
@@ -197,33 +170,30 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const insertEmoji = (emoji: string, isPng: boolean = false) => {
-    if (isPng) {
-      setContent(prev => prev + ` :${emoji}: `);
-    } else {
-      setContent(prev => prev + " " + emoji + " ");
-    }
+    if (isPng) setContent(prev => prev + ` :${emoji}: `);
+    else setContent(prev => prev + " " + emoji + " ");
   };
 
   const renderContent = (text: string) => {
     let formattedText = text;
 
-    // 1. Обратные ссылки (>>123)
+    // 1. Обратные ссылки
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
-      return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); document.getElementById('post-${id}')?.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'); setTimeout(() => document.getElementById('post-${id}')?.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+      return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. Текстовые смайлы (синие)
+    // 2. PNG смайлы (сначала, чтобы текст не ломал их)
+    PNG_EMOJIS.forEach(name => {
+      formattedText = formattedText.split(`:${name}:`).join(
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
+      );
+    });
+
+    // 3. Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span class="text-blue-700 dark:text-blue-400 font-bold">${emoji}</span>`);
-    });
-
-    // 3. PNG смайлы (:smile:)
-    PNG_EMOJIS.forEach(name => {
-      formattedText = formattedText.split(`:${name}:`).join(
-        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" />`
-      );
     });
 
     // 4. Переносы строк
@@ -324,7 +294,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" />
+                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
                             </button>
                           ))}
                         </div>
@@ -333,14 +303,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   )}
                 </div>
 
-                <input 
-                  type="text" 
-                  placeholder="Твой ник (необязательно)" 
-                  value={nickname} 
-                  onChange={handleNicknameChange} 
-                  className={`border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none ${isAdmin ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'}`} 
-                />
-                
+                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={handleNicknameChange} className={`border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none ${isAdmin ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'}`} />
                 <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
@@ -446,12 +409,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         </div>
       </div>
 
-      {/* Плавающая кнопка вверх */}
       {showScrollTop && (
-        <button 
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-6 right-6 p-3 bg-blue-700 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all z-50"
-        >
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-6 right-6 p-3 bg-blue-700 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all z-50">
           <ArrowUpIcon />
         </button>
       )}
