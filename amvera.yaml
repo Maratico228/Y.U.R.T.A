@@ -8,5 +8,5 @@ build:
   artifacts:
     "*": /
 run:
-  command: npm run start
+  command: node .next/standalone/server.js
   containerPort: 3000
