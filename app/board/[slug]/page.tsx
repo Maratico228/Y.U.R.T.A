@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -16,11 +16,6 @@ const PNG_EMOJIS = [
   "smile", "heart", "fire", "sad", "lightning", 
   "laugh", "cry", "cool", "angry", "think"
 ];
-
-// Стиль для перекрашивания PNG в синий
-const blueFilterStyle = {
-  filter: 'sepia(1) hue-rotate(190deg) saturate(5) brightness(0.8)'
-};
 
 export default function BoardPage({ params }: { params: { slug: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
@@ -83,6 +78,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const fetchPosts = async () => {
+    const supabase = getSupabase(); // <--- Инициализация тут
     const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
     if (data) setPosts(data);
   };
@@ -95,6 +91,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const handleDelete = async (postId: number) => {
     if (!confirm("Удалить этот пост?")) return;
+    const supabase = getSupabase(); // <--- Инициализация тут
     const { data, error } = await supabase.rpc('delete_post_admin', { p_id: postId, p_password: 'yurta_admin_2024' });
     if (error || !data) alert("Ошибка удаления. Неверный пароль?");
     else fetchPosts();
@@ -105,6 +102,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (!content.trim()) return;
     if (cooldown) return alert("Подождите 30 секунд перед следующей отправкой!");
     setLoading(true);
+
+    const supabase = getSupabase(); // <--- Инициализация тут
 
     let imageUrl = null;
     if (file) {
@@ -192,26 +191,22 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const renderContent = (text: string) => {
     let formattedText = text;
 
-    // 1. Обратные ссылки
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы (сначала) - перекрашиваем в синий!
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
-        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" style="filter: sepia(1) hue-rotate(190deg) saturate(5) brightness(0.8);" onerror="this.style.display='none'" />`
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
       );
     });
 
-    // 3. Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span class="text-blue-700 dark:text-blue-400 font-bold">${emoji}</span>`);
     });
 
-    // 4. Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
@@ -342,13 +337,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               <img 
-                                 src={`/emojis/${name}.png`} 
-                                 alt={name} 
-                                 className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" 
-                                 style={blueFilterStyle} // Перекрашиваем превью
-                                 onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} 
-                               />
+                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
                             </button>
                           ))}
                         </div>
