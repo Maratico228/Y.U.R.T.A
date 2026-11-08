@@ -17,12 +17,17 @@ const PNG_EMOJIS = [
   "laugh", "cry", "cool", "angry", "think"
 ];
 
+// Стиль для перекрашивания PNG в синий
+const blueFilterStyle = {
+  filter: 'sepia(1) hue-rotate(190deg) saturate(5) brightness(0.8)'
+};
+
 export default function BoardPage({ params }: { params: { slug: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
   const [nickname, setNickname] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [isSpoiler, setIsSpoiler] = useState(false); // Состояние для спойлера
+  const [isSpoiler, setIsSpoiler] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
@@ -122,7 +127,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       content: content.trim(), 
       image_url: imageUrl, 
       parent_id: replyTo ? replyTo.id : null,
-      is_spoiler: isSpoiler // Сохраняем флаг спойлера
+      is_spoiler: isSpoiler
     };
     
     const { error } = await supabase.from('posts').insert([newPost]);
@@ -192,10 +197,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы (сначала)
+    // 2. PNG смайлы (сначала) - перекрашиваем в синий!
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
-        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" style="filter: sepia(1) hue-rotate(190deg) saturate(5) brightness(0.8);" onerror="this.style.display='none'" />`
       );
     });
 
@@ -212,7 +217,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
 
-  // Компонент для отображения картинки со спойлером
   const PostImage = ({ url, isSpoiler, maxH }: { url: string, isSpoiler?: boolean, maxH: string }) => {
     const [revealed, setRevealed] = useState(!isSpoiler);
 
@@ -338,7 +342,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
+                               <img 
+                                 src={`/emojis/${name}.png`} 
+                                 alt={name} 
+                                 className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" 
+                                 style={blueFilterStyle} // Перекрашиваем превью
+                                 onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} 
+                               />
                             </button>
                           ))}
                         </div>
@@ -357,7 +367,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
                     </label>
 
-                    {/* Чекбокс спойлера */}
                     {file && (
                       <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
                         <input 
@@ -430,7 +439,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     </div>
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                     
-                    {/* Картинка с учетом спойлера */}
                     <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
                   </div>
 
@@ -453,7 +461,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                           </div>
                           <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
                           
-                          {/* Картинка с учетом спойлера в ответах */}
                           <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
                           
                           <div className="mt-2 flex justify-end">
