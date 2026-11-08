@@ -1,28 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react"; 
-import { supabase } from "@/lib/supabase";
+import { getSupabase } from "@/lib/supabase";
 
 export default function Home() {
   const [isDark, setIsDark] = useState(false);
-  
-  // Состояния для счетчиков постов
   const [generalCount, setGeneralCount] = useState<number | null>(null);
   const [floodCount, setFloodCount] = useState<number | null>(null);
 
   useEffect(() => {
-    // Синхронизация темы
     setIsDark(document.documentElement.classList.contains("dark"));
 
-    // Загружаем счетчики постов для Общей беседы и Бреда
     const fetchCounts = async () => {
-      // Считаем посты в /general/
+      const supabase = getSupabase(); // <--- Инициализация тут
+      
       const { count: gCount } = await supabase
         .from('posts')
         .select('*', { count: 'exact', head: true })
         .eq('board_slug', 'general');
       
-      // Считаем посты в /flood/
       const { count: fCount } = await supabase
         .from('posts')
         .select('*', { count: 'exact', head: true })
@@ -94,14 +90,12 @@ export default function Home() {
         />
       </div>
 
-      {/* МЕСТО ДЛЯ ТВОЕЙ ГИФКИ С ОБНОВЛЕНИЯМИ */}
       <div className="max-w-5xl mx-auto px-4 w-full mb-8">
         <div className="w-full flex justify-center">
           <img 
             src="/banner.gif" 
             alt="Обновления Юрты" 
             className="rounded-lg shadow-sm w-full max-w-4xl object-cover"
-            // Если гифки нет, картинка не сломается, просто не покажется
             onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
           />
         </div>
