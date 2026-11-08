@@ -22,6 +22,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [nickname, setNickname] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [isSpoiler, setIsSpoiler] = useState(false); // Состояние для спойлера
+  
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState<any>(null);
   
@@ -114,7 +116,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null };
+    const newPost = { 
+      board_slug: params.slug, 
+      nickname: nickname.trim() || null, 
+      content: content.trim(), 
+      image_url: imageUrl, 
+      parent_id: replyTo ? replyTo.id : null,
+      is_spoiler: isSpoiler // Сохраняем флаг спойлера
+    };
+    
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
@@ -122,7 +132,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         const rootId = replyTo.parent_id || replyTo.id;
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
-      setContent(""); setFile(null); setReplyTo(null); fetchPosts();
+      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); fetchPosts();
       setCooldown(true); setTimeout(() => setCooldown(false), 30000);
     } else {
       alert("Ошибка при отправке: " + error.message);
@@ -200,6 +210,37 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
+  };
+
+  // Компонент для отображения картинки со спойлером
+  const PostImage = ({ url, isSpoiler, maxH }: { url: string, isSpoiler?: boolean, maxH: string }) => {
+    const [revealed, setRevealed] = useState(!isSpoiler);
+
+    if (!url) return null;
+
+    if (isSpoiler && !revealed) {
+      return (
+        <div 
+          onClick={() => setRevealed(true)}
+          className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`}
+          style={{ height: '150px', width: '200px' }}
+        >
+          <span className="text-sm font-bold">СПОЙЛЕР</span>
+          <span className="text-xs mt-1">Нажмите, чтобы открыть</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-3">
+        <img 
+          src={url} 
+          alt="img" 
+          className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} 
+          onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} 
+        />
+      </div>
+    );
   };
 
   const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
@@ -310,10 +351,26 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-                  <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-600 flex items-center gap-2">
-                    <ImageIcon /> <span>{file ? file.name : "Прикрепить картинку"}</span>
-                    <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
-                  </label>
+                  <div className="flex items-center gap-4">
+                    <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-600 flex items-center gap-2">
+                      <ImageIcon /> <span>{file ? file.name : "Прикрепить картинку"}</span>
+                      <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
+                    </label>
+
+                    {/* Чекбокс спойлера */}
+                    {file && (
+                      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={isSpoiler} 
+                          onChange={(e) => setIsSpoiler(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        Скрыть под спойлер
+                      </label>
+                    )}
+                  </div>
+
                   <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
                     {loading ? "Отправка..." : cooldown ? "Ждите 30 сек..." : "Отправить"}
                   </button>
@@ -363,12 +420,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
                       <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
                       
-                      {/* РЕПОРТ ДЛЯ ТРЕДА */}
-                      <a 
-                        href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `}
-                        className="text-slate-400 hover:text-red-500 ml-2"
-                        title="Пожаловаться"
-                      >
+                      <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
                         <WarningIcon />
                       </a>
 
@@ -377,11 +429,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       )}
                     </div>
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                    {thread.image_url && (
-                      <div className="mt-3">
-                        <img src={thread.image_url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
-                      </div>
-                    )}
+                    
+                    {/* Картинка с учетом спойлера */}
+                    <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
                   </div>
 
                   {replies.length > 0 && (
@@ -393,12 +443,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                             <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
                             <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
                             
-                            {/* РЕПОРТ ДЛЯ ОТВЕТА */}
-                            <a 
-                              href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `}
-                              className="text-slate-400 hover:text-red-500 ml-2"
-                              title="Пожаловаться"
-                            >
+                            <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
                               <WarningIcon />
                             </a>
 
@@ -407,11 +452,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                             )}
                           </div>
                           <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                          {reply.image_url && (
-                            <div className="mt-2">
-                              <img src={reply.image_url} alt="img" className="max-w-full h-auto max-h-[300px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
-                            </div>
-                          )}
+                          
+                          {/* Картинка с учетом спойлера в ответах */}
+                          <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
+                          
                           <div className="mt-2 flex justify-end">
                             <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
                           </div>
