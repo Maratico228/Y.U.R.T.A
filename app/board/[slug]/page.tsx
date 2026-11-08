@@ -182,7 +182,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы (сначала, чтобы текст не ломал их)
+    // 2. PNG смайлы (сначала)
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
@@ -224,6 +224,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   );
   const ArrowUpIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+  );
+  const WarningIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
   );
 
   return (
@@ -360,6 +363,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
                       <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
                       
+                      {/* РЕПОРТ ДЛЯ ТРЕДА */}
+                      <a 
+                        href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `}
+                        className="text-slate-400 hover:text-red-500 ml-2"
+                        title="Пожаловаться"
+                      >
+                        <WarningIcon />
+                      </a>
+
                       {isAdmin && (
                         <button onClick={() => handleDelete(thread.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
                       )}
@@ -381,6 +393,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                             <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
                             <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
                             
+                            {/* РЕПОРТ ДЛЯ ОТВЕТА */}
+                            <a 
+                              href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `}
+                              className="text-slate-400 hover:text-red-500 ml-2"
+                              title="Пожаловаться"
+                            >
+                              <WarningIcon />
+                            </a>
+
                             {isAdmin && (
                               <button onClick={() => handleDelete(reply.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
                             )}
