@@ -57,8 +57,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     description: `Беседа в разделе /${params.slug}/.` 
   };
 
+  // 1. ИНИЦИАЛИЗАЦИЯ ТЕМЫ (фикс слета темы)
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    // Проверяем localStorage напрямую, чтобы тема не слетала
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      document.documentElement.classList.add("dark");
+      setIsDark(true);
+    } else if (savedTheme === "light") {
+      document.documentElement.classList.remove("dark");
+      setIsDark(false);
+    } else {
+      // Если темы нет, смотрим на системную
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (prefersDark) {
+        document.documentElement.classList.add("dark");
+        setIsDark(true);
+      }
+    }
+
     fetchPosts();
 
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
@@ -167,13 +184,22 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
   };
 
+  // 2. ФИКС ДУБЛЕЙ ПРИ ОТВЕТЕ
   const handleReplyClick = (postId: number) => {
     setReplyTo({ id: postId });
     setActiveTab('board');
-    setContent(prev => `>>${postId}\n${prev}`);
+    
+    // Убираем старые ссылки из текста, чтобы не дублировались
+    setContent(prev => {
+      // Удаляем все существующие ссылки вида >>123 в начале строки
+      const cleanPrev = prev.replace(/^>>\d+\n/, "");
+      return `>>${postId}\n${cleanPrev}`;
+    });
+
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
+  // 3. ФИКС ПЕРЕХОДА ИЗ КАТАЛОГА (без слета темы)
   const scrollToPost = (postId: number) => {
     setActiveTab('board');
     setTimeout(() => {
@@ -191,29 +217,30 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     else setContent(prev => prev + " " + emoji + " ");
   };
 
+  // 4. ФИКС РАБОЧИХ ССЫЛОК В ТЕКСТЕ
   const renderContent = (text: string) => {
     let formattedText = text;
 
-    // 1. Обратные ссылки
-    formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
-      return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+    // Исправляем регулярку: ищем >>123 (а не &gt;&gt;)
+    formattedText = formattedText.replace(/>>(\d+)/g, (match, id) => {
+      return `<a href="#post-${id}" onclick="event.preventDefault(); document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); const el = document.getElementById('post-${id}'); el?.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'); setTimeout(() => el?.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000);" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы (перекрашиваем через dark:invert)
+    // PNG смайлы (с перекраской темы)
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
-    // 3. Текстовые смайлы (синие)
+    // Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
-    // 4. Переносы строк
+    // Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
@@ -344,7 +371,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               {/* Здесь тоже добавляем dark:brightness-0 dark:invert */}
                                <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
                             </button>
                           ))}
