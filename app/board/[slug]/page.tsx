@@ -25,6 +25,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isSpoiler, setIsSpoiler] = useState(false);
   
   const [loading, setLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true); // Стейт для загрузки
   const [replyTo, setReplyTo] = useState<any>(null);
   
   const [isAdmin, setIsAdmin] = useState(false);
@@ -78,9 +79,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const fetchPosts = async () => {
-    const supabase = getSupabase(); // <--- Инициализация тут
+    setIsFetching(true);
+    const supabase = getSupabase();
     const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
     if (data) setPosts(data);
+    setIsFetching(false);
   };
 
   const handleNicknameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +94,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const handleDelete = async (postId: number) => {
     if (!confirm("Удалить этот пост?")) return;
-    const supabase = getSupabase(); // <--- Инициализация тут
+    const supabase = getSupabase();
     const { data, error } = await supabase.rpc('delete_post_admin', { p_id: postId, p_password: 'yurta_admin_2024' });
     if (error || !data) alert("Ошибка удаления. Неверный пароль?");
     else fetchPosts();
@@ -103,7 +106,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (cooldown) return alert("Подождите 30 секунд перед следующей отправкой!");
     setLoading(true);
 
-    const supabase = getSupabase(); // <--- Инициализация тут
+    const supabase = getSupabase();
 
     let imageUrl = null;
     if (file) {
@@ -191,22 +194,27 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const renderContent = (text: string) => {
     let formattedText = text;
 
+    // 1. Обратные ссылки
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
+    // 2. PNG смайлы (сначала, чтобы текст не ломал HTML)
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
       );
     });
 
+    // 3. Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
-      formattedText = formattedText.replace(regex, `<span class="text-blue-700 dark:text-blue-400 font-bold">${emoji}</span>`);
+      // Используем span с жестко заданным цветом (text-blue-500), чтобы точно перекрыть родительский
+      formattedText = formattedText.replace(regex, `<span class="text-blue-500 dark:text-blue-400 font-bold">${emoji}</span>`);
     });
 
+    // 4. Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
@@ -319,13 +327,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600">
-                      <SmileIcon /> {showEmojis ? "Свернуть смайлы" : "Показать смайлы"}
+                      <SmileIcon /> {showEmojis ? "Свернуть эмотиконы" : "Показать эмотиконы"}
                     </button>
                   </div>
                   {showEmojis && (
                     <div className="flex flex-col gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
                       <div>
-                        <p className="text-xs text-slate-400 mb-1">Текстовые (синие):</p>
+                        <p className="text-xs text-slate-400 mb-1">Эмотиконы:</p>
                         <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 max-h-32 overflow-y-auto">
                           {TEXT_EMOJIS.map((emoji) => (
                             <button key={emoji} type="button" onClick={() => insertEmoji(emoji, false)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded font-mono flex items-center justify-center break-all">{emoji}</button>
@@ -333,7 +341,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         </div>
                       </div>
                       <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                        <p className="text-xs text-slate-400 mb-1">Картинки (PNG):</p>
+                        <p className="text-xs text-slate-400 mb-1">Эмоджи:</p>
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
@@ -379,7 +387,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         )}
 
         <div className="flex flex-col gap-6">
-          {filteredThreads.length === 0 ? (
+          {isFetching ? (
+            <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+              Загрузка тредов...
+            </div>
+          ) : filteredThreads.length === 0 ? (
             <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">{searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}</div>
           ) : (
             filteredThreads.map((thread) => {
@@ -477,4 +489,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-}
+      }
