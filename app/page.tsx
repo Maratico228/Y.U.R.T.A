@@ -8,7 +8,6 @@ export default function Home() {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    // Синхронизация темы
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
@@ -24,19 +23,17 @@ export default function Home() {
       }
     }
 
-    // Загружаем счетчики постов для ВСЕХ досок
     const fetchCounts = async () => {
       const supabase = getSupabase();
       
-      // Делаем один запрос, чтобы получить все посты (только их board_slug)
       const { data } = await supabase
         .from('posts')
         .select('board_slug');
 
       if (data) {
-        // Считаем количество постов для каждой доски
         const countsObj: Record<string, number> = {};
-        data.forEach(post => {
+        // ВОТ ИСПРАВЛЕНИЕ: добавили : any
+        data.forEach((post: any) => {
           countsObj[post.board_slug] = (countsObj[post.board_slug] || 0) + 1;
         });
         setCounts(countsObj);
