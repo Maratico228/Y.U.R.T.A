@@ -57,9 +57,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     description: `Беседа в разделе /${params.slug}/.` 
   };
 
-  // 1. ИНИЦИАЛИЗАЦИЯ ТЕМЫ (фикс слета темы)
   useEffect(() => {
-    // Проверяем localStorage напрямую, чтобы тема не слетала
+    // Проверяем тему
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
@@ -68,7 +67,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       document.documentElement.classList.remove("dark");
       setIsDark(false);
     } else {
-      // Если темы нет, смотрим на системную
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
       if (prefersDark) {
         document.documentElement.classList.add("dark");
@@ -184,14 +182,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
   };
 
-  // 2. ФИКС ДУБЛЕЙ ПРИ ОТВЕТЕ
   const handleReplyClick = (postId: number) => {
     setReplyTo({ id: postId });
     setActiveTab('board');
     
-    // Убираем старые ссылки из текста, чтобы не дублировались
     setContent(prev => {
-      // Удаляем все существующие ссылки вида >>123 в начале строки
       const cleanPrev = prev.replace(/^>>\d+\n/, "");
       return `>>${postId}\n${cleanPrev}`;
     });
@@ -199,15 +194,18 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
-  // 3. ФИКС ПЕРЕХОДА ИЗ КАТАЛОГА (без слета темы)
+  // ФИКС АНИМАЦИИ: Добавляем только рамку и прозрачный синий фон (он не ломает темную тему)
   const scrollToPost = (postId: number) => {
     setActiveTab('board');
     setTimeout(() => {
       const el = document.getElementById(`post-${postId}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800');
-        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000);
+        // Добавляем классы для рамки и легкого синего свечения, НЕ трогаем bg-white/dark:bg-slate-800
+        el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10');
+        setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10');
+        }, 2000);
       }
     }, 100);
   };
@@ -217,30 +215,26 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     else setContent(prev => prev + " " + emoji + " ");
   };
 
-  // 4. ФИКС РАБОЧИХ ССЫЛОК В ТЕКСТЕ
   const renderContent = (text: string) => {
     let formattedText = text;
 
-    // Исправляем регулярку: ищем >>123 (а не &gt;&gt;)
+    // ФИКС ССЫЛОК: используем ту же логику подсветки через bg-blue-500/10
     formattedText = formattedText.replace(/>>(\d+)/g, (match, id) => {
-      return `<a href="#post-${id}" onclick="event.preventDefault(); document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); const el = document.getElementById('post-${id}'); el?.classList.add('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'); setTimeout(() => el?.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-50', 'dark:bg-slate-800'), 2000);" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+      return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // PNG смайлы (с перекраской темы)
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
-    // Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
-    // Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
