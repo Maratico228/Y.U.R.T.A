@@ -199,19 +199,17 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы
+    // 2. PNG смайлы (перекрашиваем через dark:invert)
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
-        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
-    // 3. Текстовые смайлы (ЖЕСТКО СИНИЕ)
+    // 3. Текстовые смайлы (синие)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
-      
-      // Вставляем жесткий инлайн-стиль. #2563eb - это насыщенный синий цвет.
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
@@ -346,7 +344,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                           {PNG_EMOJIS.map((name) => (
                             <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
+                               {/* Здесь тоже добавляем dark:brightness-0 dark:invert */}
+                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
                             </button>
                           ))}
                         </div>
@@ -490,4 +489,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-    }
+}
