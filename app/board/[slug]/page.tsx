@@ -58,7 +58,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   useEffect(() => {
-    // Проверяем тему
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
@@ -151,7 +150,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
     if (!error) {
       if (replyTo) {
-        const rootId = replyTo.parent_id || replyTo.id;
+        // Поднимаем корневой тред наверх
+        let rootId = replyTo.id;
+        const parent = posts.find(p => p.id === replyTo.id);
+        if (parent && parent.parent_id) rootId = parent.parent_id;
+        
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
       setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); fetchPosts();
@@ -194,14 +197,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
 
-  // ФИКС АНИМАЦИИ: Добавляем только рамку и прозрачный синий фон (он не ломает темную тему)
   const scrollToPost = (postId: number) => {
     setActiveTab('board');
     setTimeout(() => {
       const el = document.getElementById(`post-${postId}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        // Добавляем классы для рамки и легкого синего свечения, НЕ трогаем bg-white/dark:bg-slate-800
         el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10');
         setTimeout(() => {
           el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10');
@@ -218,7 +219,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const renderContent = (text: string) => {
     let formattedText = text;
 
-    // ФИКС ССЫЛОК: используем ту же логику подсветки через bg-blue-500/10
     formattedText = formattedText.replace(/>>(\d+)/g, (match, id) => {
       return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
@@ -270,7 +270,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     );
   };
 
-  const getReplies = (parentId: number) => posts.filter(p => p.parent_id === parentId);
+  // ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ ВЛОЖЕННЫХ ОТВЕТОВ
+  const getReplies = (threadId: number) => {
+    // Берем прямые ответы на тред
+    const directReplies = posts.filter(p => p.parent_id === threadId);
+    let allReplies = [...directReplies];
+
+    // Ищем ответы на эти ответы (вложенность до бесконечности)
+    let lastCount = 0;
+    while (lastCount !== allReplies.length) {
+      lastCount = allReplies.length;
+      const currentIds = allReplies.map(r => r.id);
+      const nestedReplies = posts.filter(p => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find(ar => ar.id === p.id));
+      allReplies = [...allReplies, ...nestedReplies];
+    }
+
+    // Сортируем по времени создания (старые сверху)
+    return allReplies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  };
+
   const threads = posts.filter(p => !p.parent_id);
   
   const filteredThreads = threads.filter(t => {
