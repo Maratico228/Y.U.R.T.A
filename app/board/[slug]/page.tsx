@@ -25,7 +25,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isSpoiler, setIsSpoiler] = useState(false);
   
   const [loading, setLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true); // Стейт для загрузки
+  const [isFetching, setIsFetching] = useState(true);
   const [replyTo, setReplyTo] = useState<any>(null);
   
   const [isAdmin, setIsAdmin] = useState(false);
@@ -199,19 +199,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return `<a href="#post-${id}" onclick="document.getElementById('post-${id}')?.scrollIntoView({behavior: 'smooth', block: 'center'}); return false;" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 2. PNG смайлы (сначала, чтобы текст не ломал HTML)
+    // 2. PNG смайлы
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom" onerror="this.style.display='none'" />`
       );
     });
 
-    // 3. Текстовые смайлы (синие)
+    // 3. Текстовые смайлы (ЖЕСТКО СИНИЕ)
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
-      // Используем span с жестко заданным цветом (text-blue-500), чтобы точно перекрыть родительский
-      formattedText = formattedText.replace(regex, `<span class="text-blue-500 dark:text-blue-400 font-bold">${emoji}</span>`);
+      
+      // Вставляем жесткий инлайн-стиль. #2563eb - это насыщенный синий цвет.
+      formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
     // 4. Переносы строк
@@ -489,4 +490,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-      }
+    }
