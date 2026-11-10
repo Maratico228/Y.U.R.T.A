@@ -328,7 +328,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600">
-                      <SmileIcon /> {showEmojis ? "Свернуть эмотиконы" : "Показать эмотиконы"}
+                      <SmileIcon /> {showEmojis ? "Свернуть эмоджи" : "Показать эмоджи"}
                     </button>
                   </div>
                   {showEmojis && (
