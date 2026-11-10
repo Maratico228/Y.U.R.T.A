@@ -5,27 +5,42 @@ import { getSupabase } from "@/lib/supabase";
 
 export default function Home() {
   const [isDark, setIsDark] = useState(false);
-  const [generalCount, setGeneralCount] = useState<number | null>(null);
-  const [floodCount, setFloodCount] = useState<number | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    // Синхронизация темы
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      document.documentElement.classList.add("dark");
+      setIsDark(true);
+    } else if (savedTheme === "light") {
+      document.documentElement.classList.remove("dark");
+      setIsDark(false);
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      if (prefersDark) {
+        document.documentElement.classList.add("dark");
+        setIsDark(true);
+      }
+    }
 
+    // Загружаем счетчики постов для ВСЕХ досок
     const fetchCounts = async () => {
-      const supabase = getSupabase(); // <--- Инициализация тут
+      const supabase = getSupabase();
       
-      const { count: gCount } = await supabase
+      // Делаем один запрос, чтобы получить все посты (только их board_slug)
+      const { data } = await supabase
         .from('posts')
-        .select('*', { count: 'exact', head: true })
-        .eq('board_slug', 'general');
-      
-      const { count: fCount } = await supabase
-        .from('posts')
-        .select('*', { count: 'exact', head: true })
-        .eq('board_slug', 'flood');
+        .select('board_slug');
 
-      if (gCount !== null) setGeneralCount(gCount);
-      if (fCount !== null) setFloodCount(fCount);
+      if (data) {
+        // Считаем количество постов для каждой доски
+        const countsObj: Record<string, number> = {};
+        data.forEach(post => {
+          countsObj[post.board_slug] = (countsObj[post.board_slug] || 0) + 1;
+        });
+        setCounts(countsObj);
+      }
     };
 
     fetchCounts();
@@ -111,6 +126,7 @@ export default function Home() {
               <li key={school.slug}>
                 <a href={`/board/${school.slug}`} className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                   /{school.slug}/ — {school.name}
+                  {counts[school.slug] > 0 && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{counts[school.slug]}]</span>}
                 </a>
               </li>
             ))}
@@ -125,13 +141,13 @@ export default function Home() {
             <li>
               <a href="/board/general" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                 /general/ — Общая беседа 
-                {generalCount !== null && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{generalCount}]</span>}
+                {counts['general'] > 0 && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{counts['general']}]</span>}
               </a>
             </li>
             <li>
               <a href="/board/flood" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 text-[16px] font-medium block">
                 /flood/ — Раздел бред 
-                {floodCount !== null && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{floodCount}]</span>}
+                {counts['flood'] > 0 && <span className="text-slate-400 dark:text-slate-500 text-sm ml-1">[{counts['flood']}]</span>}
               </a>
             </li>
           </ul>
