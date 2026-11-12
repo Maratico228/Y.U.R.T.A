@@ -32,7 +32,6 @@ export default function Home() {
 
       if (data) {
         const countsObj: Record<string, number> = {};
-        // ВОТ ИСПРАВЛЕНИЕ: добавили : any
         data.forEach((post: any) => {
           countsObj[post.board_slug] = (countsObj[post.board_slug] || 0) + 1;
         });
@@ -102,14 +101,21 @@ export default function Home() {
         />
       </div>
 
+      {/* НОВАЯ ПЛАШКА ПРО БЕЗОПАСНОСТЬ */}
       <div className="max-w-5xl mx-auto px-4 w-full mb-8">
-        <div className="w-full flex justify-center">
-          <img 
-            src="/banner.gif" 
-            alt="Обновления Юрты" 
-            className="rounded-lg shadow-sm w-full max-w-4xl object-cover"
-            onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
-          />
+        <div className="bg-blue-600 dark:bg-blue-700 text-white p-5 rounded-lg shadow-md">
+          <h3 className="text-lg font-bold mb-2 text-center uppercase tracking-wide">
+            ! Важная информация !
+          </h3>
+          <p className="text-sm md:text-base mb-3 text-center">
+            В связи с частыми попытками взломать и заспамить Юрту было принято решение добавить капчу. Это был лишь вопрос времени, поэтому теперь сайт должен стать безопаснее. 
+          </p>
+          <p className="text-sm md:text-base mb-3 text-center">
+            Во время технических работ могли пропасть все, ранее загруженные изображения. Приношу свои извинения за неудобства.
+          </p>
+          <p className="text-xs text-blue-100 text-center">
+            Связь с администрацией: <a href="mailto:officialyurta@gmail.com" className="underline hover:text-white font-medium">officialyurta@gmail.com</a>
+          </p>
         </div>
       </div>
 
