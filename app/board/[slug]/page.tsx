@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { Turnstile } from "@marsidev/react-turnstile";
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -35,6 +36,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [showEmojis, setShowEmojis] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  
+  // СОСТОЯНИЕ ДЛЯ КАПЧИ
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -118,6 +122,10 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     e.preventDefault();
     if (!content.trim()) return;
     if (cooldown) return alert("Подождите 30 секунд перед следующей отправкой!");
+    
+    // ПРОВЕРКА КАПЧИ
+    if (!captchaToken) return alert("Пожалуйста, подтвердите, что вы не робот (капча внизу).");
+
     setLoading(true);
 
     const supabase = getSupabase();
@@ -146,15 +154,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       is_spoiler: isSpoiler
     };
     
+    // ПЕРЕДАЕМ ТОКЕН КАПЧИ В SUPABASE
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
       if (replyTo) {
-        // Поднимаем корневой тред наверх
-        let rootId = replyTo.id;
-        const parent = posts.find(p => p.id === replyTo.id);
-        if (parent && parent.parent_id) rootId = parent.parent_id;
-        
+        const rootId = replyTo.parent_id || replyTo.id;
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
       setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); fetchPosts();
@@ -270,13 +275,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     );
   };
 
-  // ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ ВЛОЖЕННЫХ ОТВЕТОВ
   const getReplies = (threadId: number) => {
-    // Берем прямые ответы на тред
     const directReplies = posts.filter(p => p.parent_id === threadId);
     let allReplies = [...directReplies];
-
-    // Ищем ответы на эти ответы (вложенность до бесконечности)
     let lastCount = 0;
     while (lastCount !== allReplies.length) {
       lastCount = allReplies.length;
@@ -284,8 +285,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       const nestedReplies = posts.filter(p => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find(ar => ar.id === p.id));
       allReplies = [...allReplies, ...nestedReplies];
     }
-
-    // Сортируем по времени создания (старые сверху)
     return allReplies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   };
 
@@ -414,7 +413,17 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       </label>
                     )}
                   </div>
+                </div>
+                
+                {/* КАПЧА CLOUDFLARE TURNSTILE */}
+                <div className="mt-4 flex justify-center">
+                  <Turnstile 
+                    siteKey="0x4AAAAAAF9rxOxsJCAeQlCH"
+                    onSuccess={(token) => setCaptchaToken(token)}
+                  />
+                </div>
 
+                <div className="flex justify-end mt-2">
                   <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
                     {loading ? "Отправка..." : cooldown ? "Ждите 30 сек..." : "Отправить"}
                   </button>
@@ -527,4 +536,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-}
+                                                      }
