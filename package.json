@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.0.0",
     "@supabase/supabase-js": "^2.43.4",
     "next": "14.2.3",
     "react": "^18",
