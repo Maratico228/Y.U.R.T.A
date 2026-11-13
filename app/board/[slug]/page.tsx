@@ -29,7 +29,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isFetching, setIsFetching] = useState(true);
   const [replyTo, setReplyTo] = useState<any>(null);
   
-  const [isAdmin, setIsAdmin] = useState(false);
   const [cooldown, setCooldown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
@@ -37,8 +36,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isDark, setIsDark] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   
-  // СОСТОЯНИЕ ДЛЯ КАПЧИ
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
 
@@ -104,27 +103,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setIsFetching(false);
   };
 
-  const handleNicknameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setNickname(val);
-    setIsAdmin(val === 'yurta_admin_2024');
-  };
-
-  const handleDelete = async (postId: number) => {
-    if (!confirm("Удалить этот пост?")) return;
-    const supabase = getSupabase();
-    const { data, error } = await supabase.rpc('delete_post_admin', { p_id: postId, p_password: 'yurta_admin_2024' });
-    if (error || !data) alert("Ошибка удаления. Неверный пароль?");
-    else fetchPosts();
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
-    if (cooldown) return alert("Подождите 30 секунд перед следующей отправкой!");
+    setErrorMsg(null);
     
-    // ПРОВЕРКА КАПЧИ
-    if (!captchaToken) return alert("Пожалуйста, подтвердите, что вы не робот (капча внизу).");
+    if (!content.trim()) return;
+    if (cooldown) return setErrorMsg("Подождите 30 секунд перед следующей отправкой!");
+    if (!captchaToken) return setErrorMsg("Пожалуйста, подтвердите, что вы не робот (капча внизу).");
 
     setLoading(true);
 
@@ -139,7 +124,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
         imageUrl = urlData.publicUrl;
       } else {
-        alert("Ошибка при загрузке картинки: " + (uploadError?.message || "Неизвестная ошибка"));
+        setErrorMsg("Ошибка при загрузке картинки: " + (uploadError?.message || "Неизвестная ошибка"));
         setLoading(false);
         return;
       }
@@ -154,7 +139,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       is_spoiler: isSpoiler
     };
     
-    // ПЕРЕДАЕМ ТОКЕН КАПЧИ В SUPABASE
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
@@ -165,7 +149,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); fetchPosts();
       setCooldown(true); setTimeout(() => setCooldown(false), 30000);
     } else {
-      alert("Ошибка при отправке: " + error.message);
+      setErrorMsg(error.message); 
     }
     setLoading(false);
   };
@@ -220,26 +204,32 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (isPng) setContent(prev => prev + ` :${emoji}: `);
     else setContent(prev => prev + " " + emoji + " ");
   };
-
   const renderContent = (text: string) => {
-    let formattedText = text;
+    let formattedText = text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
-    formattedText = formattedText.replace(/>>(\d+)/g, (match, id) => {
+    // 2. Обратные ссылки (т.к. мы экранировали >, ищем &gt;&gt;123)
+    formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
       return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
+    // 3. PNG смайлы
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
+    // 4. Текстовые смайлы
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
+    // 5. Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
@@ -391,7 +381,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   )}
                 </div>
 
-                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={handleNicknameChange} className={`border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none ${isAdmin ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-400' : 'border-slate-300 dark:border-slate-600 focus:border-blue-500'}`} />
+                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none border-slate-300 dark:border-slate-600 focus:border-blue-500" />
                 <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
@@ -422,6 +412,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     onSuccess={(token) => setCaptchaToken(token)}
                   />
                 </div>
+
+                {errorMsg && (
+                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2 font-medium">
+                    !ОШИБКА! {errorMsg}
+                  </div>
+                )}
 
                 <div className="flex justify-end mt-2">
                   <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
@@ -480,10 +476,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
                         <WarningIcon />
                       </a>
-
-                      {isAdmin && (
-                        <button onClick={() => handleDelete(thread.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
-                      )}
                     </div>
                     <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                     
@@ -502,10 +494,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                             <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
                               <WarningIcon />
                             </a>
-
-                            {isAdmin && (
-                              <button onClick={() => handleDelete(reply.id)} className="text-xs text-red-500 hover:underline ml-2">[Удалить]</button>
-                            )}
                           </div>
                           <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
                           
@@ -536,4 +524,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-                                                      }
+    }
