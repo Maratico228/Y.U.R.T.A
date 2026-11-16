@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react"; 
+import { useState, useEffect, useRef } from "react"; 
 import { getSupabase } from "@/lib/supabase";
 
 export default function Home() {
   const [isDark, setIsDark] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  
+  // Ссылка на меню для закрытия по клику вне его
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -30,6 +33,16 @@ export default function Home() {
       }
     };
     fetchCounts();
+
+    // Слушатель клика вне меню
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsCreateOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+
   }, []);
 
   const toggleTheme = () => {
@@ -56,6 +69,8 @@ export default function Home() {
     { name: "Политехническая школа", slug: "polytech" },
   ];
 
+  const allBoards = [...schools, { name: "Общая беседа", slug: "general" }, { name: "Бред", slug: "flood" }];
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans flex flex-col">
       
@@ -68,21 +83,22 @@ export default function Home() {
             className="dark:brightness-0 dark:invert" 
           />
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Кнопка "Создать тред" с выпадающим меню */}
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button 
                 onClick={() => setIsCreateOpen(!isCreateOpen)}
-                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                Создать тред
+                <span className="hidden sm:inline">Создать тред</span>
+                <span className="sm:hidden">Тред</span>
               </button>
               
               {isCreateOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
                   <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
-                  {[...schools, {name: "Общая беседа", slug: "general"}, {name: "Бред", slug: "flood"}].map((b) => (
+                  {allBoards.map((b) => (
                     <a 
                       key={b.slug} 
                       href={`/board/${b.slug}`}
@@ -94,6 +110,15 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Иконка почты */}
+            <a 
+              href="mailto:officialyurta@gmail.com" 
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" 
+              title="Написать админу"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            </a>
 
             <button 
               onClick={toggleTheme}
@@ -198,4 +223,4 @@ export default function Home() {
       </footer>
     </main>
   );
-            }
+        }
