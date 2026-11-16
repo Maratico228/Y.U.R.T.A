@@ -116,8 +116,23 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const fetchPosts = async () => {
     setIsFetching(true);
     const supabase = getSupabase();
-    const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
-    if (data) setPosts(data);
+    
+    // Берем посты и сразу сортируем по bumped_at (свежие сверху)
+    const { data } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('board_slug', params.slug)
+      .order('bumped_at', { ascending: false });
+    
+    if (data) {
+      // Дополнительная сортировка на клиенте для надежности
+      const sortedData = [...data].sort((a, b) => {
+        const dateA = new Date(a.bumped_at || a.created_at).getTime();
+        const dateB = new Date(b.bumped_at || b.created_at).getTime();
+        return dateB - dateA;
+      });
+      setPosts(sortedData);
+    }
     setIsFetching(false);
   };
 
@@ -147,16 +162,42 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
+    const newPost = { 
+      board_slug: params.slug, 
+      nickname: nickname.trim() || null, 
+      content: content.trim(), 
+      image_url: imageUrl, 
+      parent_id: replyTo ? replyTo.id : null, 
+      is_spoiler: isSpoiler 
+    };
+    
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
+      // Если это ответ на пост, нужно обновить bumped_at у КОРНЕВОГО треда
       if (replyTo) {
-        const rootId = replyTo.parent_id || replyTo.id;
+        const parentPost = posts.find(p => p.id === replyTo.id);
+        
+        // Находим корневой ID (если ответили на ответ, берем его родителя)
+        let rootId = replyTo.id;
+        if (parentPost && parentPost.parent_id) {
+          rootPost = parentPost.parent_id;
+        }
+
+        // Обновляем время бампа у корневого треда
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
-      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); fetchPosts();
-      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
+      
+      setContent(""); 
+      setFile(null); 
+      setReplyTo(null); 
+      setIsSpoiler(false); 
+      
+      // Перезапрашиваем посты, чтобы применить сортировку
+      await fetchPosts();
+      
+      setCooldown(true); 
+      setTimeout(() => setCooldown(false), 30000);
     } else {
       setErrorMsg(error.message); 
     }
@@ -299,7 +340,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </a>
           
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Кнопка "Создать тред" с выпадающим меню */}
             <div className="relative" ref={menuRef}>
               <button 
                 onClick={() => setIsCreateOpen(!isCreateOpen)}
@@ -328,7 +368,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
             <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium hidden sm:block">На главную</a>
             
-            {/* Иконка почты */}
             <a 
               href="mailto:officialyurta@gmail.com" 
               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" 
@@ -542,4 +581,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-                            }
+}
