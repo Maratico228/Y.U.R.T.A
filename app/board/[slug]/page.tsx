@@ -204,32 +204,29 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (isPng) setContent(prev => prev + ` :${emoji}: `);
     else setContent(prev => prev + " " + emoji + " ");
   };
+
   const renderContent = (text: string) => {
     let formattedText = text
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
 
-    // 2. Обратные ссылки (т.к. мы экранировали >, ищем &gt;&gt;123)
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
       return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
-    // 3. PNG смайлы
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
         `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
-    // 4. Текстовые смайлы
     TEXT_EMOJIS.forEach(emoji => {
       const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
 
-    // 5. Переносы строк
     formattedText = formattedText.replace(/\n/g, '<br/>');
     
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
@@ -325,7 +322,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-4">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 uppercase">/{params.slug}/</h1>
           <h2 className="text-xl font-bold text-blue-800 dark:text-blue-400 mb-1">{currentBoard.name}</h2>
@@ -405,7 +402,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   </div>
                 </div>
                 
-                {/* КАПЧА CLOUDFLARE TURNSTILE */}
                 <div className="mt-4 flex justify-center">
                   <Turnstile 
                     siteKey="0x4AAAAAAF9rxOxsJCAeQlCH"
@@ -415,7 +411,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2 font-medium">
-                    !ОШИБКА! {errorMsg}
+                    ⚠️ {errorMsg}
                   </div>
                 )}
 
@@ -429,6 +425,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         )}
 
+        {/* ЛЕНТА ПОСТОВ (ДОСКА ИЛИ КАТАЛОГ) */}
         <div className="flex flex-col gap-6">
           {isFetching ? (
             <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -437,82 +434,104 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           ) : filteredThreads.length === 0 ? (
             <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">{searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}</div>
           ) : (
-            filteredThreads.map((thread) => {
-              const replies = getReplies(thread.id);
-              const lastReply = replies.length > 0 ? replies[replies.length - 1] : null;
+            activeTab === 'catalog' ? (
               
-              if (activeTab === 'catalog') {
-                return (
-                  <div key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm p-4 hover:border-blue-400 dark:hover:border-blue-500">
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-blue-700 dark:text-blue-400 text-sm">{thread.nickname || "Аноним"}</span>
-                          <span className="text-xs text-slate-400 dark:text-slate-500">№{thread.id}</span>
-                          <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto sm:ml-0">Ответов: {replies.length}</span>
+              // --- ВЕРСТКА КАТАЛОГА (ПЛИТКА) ---
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredThreads.map((thread) => {
+                  const replies = getReplies(thread.id);
+                  return (
+                    <div 
+                      key={thread.id} 
+                      onClick={() => scrollToPost(thread.id)}
+                      className="group cursor-pointer bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex overflow-hidden transition-colors h-32"
+                    >
+                      {/* Картинка слева */}
+                      {thread.image_url && !thread.is_spoiler ? (
+                        <div className="w-24 bg-slate-100 dark:bg-slate-900 flex-shrink-0 border-r border-slate-200 dark:border-slate-700">
+                          <img src={thread.image_url} alt="thumb" className="w-full h-full object-cover" />
                         </div>
-                        <h3 className="text-slate-800 dark:text-slate-200 font-medium line-clamp-2 mb-2">{thread.content}</h3>
-                        {lastReply && (
-                          <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-700 line-clamp-1">
-                            <span className="font-bold text-slate-600 dark:text-slate-300">Последний ответ:</span> {lastReply.content}
-                          </div>
-                        )}
+                      ) : (
+                        <div className="w-24 bg-slate-100 dark:bg-slate-900 flex-shrink-0 border-r border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-600">
+                          <ImageIcon />
+                        </div>
+                      )}
+
+                      {/* Контент справа */}
+                      <div className="p-3 flex flex-col justify-between flex-grow min-w-0">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            {thread.nickname || "Аноним"}
+                          </h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-snug break-words">
+                            {thread.content}
+                          </p>
+                        </div>
+                        <div className="flex justify-between items-center mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                          <span>№{thread.id}</span>
+                          <span>Ответов: {replies.length}</span>
+                        </div>
                       </div>
-                      <button onClick={() => scrollToPost(thread.id)} className="shrink-0 bg-slate-100 dark:bg-slate-700 hover:bg-blue-100 dark:hover:bg-slate-600 text-blue-700 dark:text-blue-400 text-sm font-medium py-1.5 px-4 rounded">Перейти</button>
+                    </div>
+                  );
+                })}
+              </div>
+
+            ) : (
+              
+              // --- ВЕРСТКА ДОСКИ (СПИСОК) ---
+              filteredThreads.map((thread) => {
+                const replies = getReplies(thread.id);
+                return (
+                  <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
+                    <div className="p-5 border-b border-slate-100 dark:border-slate-700">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
+                        
+                        <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
+                          <WarningIcon />
+                        </a>
+                      </div>
+                      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
+                      
+                      <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
+                    </div>
+
+                    {replies.length > 0 && (
+                      <div className="bg-white dark:bg-slate-800 flex flex-col">
+                        {replies.map((reply) => (
+                          <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
+                              <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
+                              <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
+                              
+                              <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
+                                <WarningIcon />
+                              </a>
+                            </div>
+                            <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
+                            
+                            <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
+                            
+                            <div className="mt-2 flex justify-end">
+                              <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                      <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
                     </div>
                   </div>
                 );
-              }
-
-              return (
-                <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
-                  <div className="p-5 border-b border-slate-100 dark:border-slate-700">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
-                      <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
-                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
-                      <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
-                      
-                      <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
-                        <WarningIcon />
-                      </a>
-                    </div>
-                    <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                    
-                    <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
-                  </div>
-
-                  {replies.length > 0 && (
-                    <div className="bg-white dark:bg-slate-800 flex flex-col">
-                      {replies.map((reply) => (
-                        <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
-                            <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
-                            <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
-                            
-                            <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
-                              <WarningIcon />
-                            </a>
-                          </div>
-                          <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                          
-                          <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
-                          
-                          <div className="mt-2 flex justify-end">
-                            <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                    <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
-                  </div>
-                </div>
-              );
-            })
+              })
+            )
           )}
         </div>
       </div>
@@ -524,4 +543,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-    }
+                        }
