@@ -6,6 +6,7 @@ import { getSupabase } from "@/lib/supabase";
 export default function Home() {
   const [isDark, setIsDark] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -15,21 +16,11 @@ export default function Home() {
     } else if (savedTheme === "light") {
       document.documentElement.classList.remove("dark");
       setIsDark(false);
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      if (prefersDark) {
-        document.documentElement.classList.add("dark");
-        setIsDark(true);
-      }
     }
 
     const fetchCounts = async () => {
       const supabase = getSupabase();
-      
-      const { data } = await supabase
-        .from('posts')
-        .select('board_slug');
-
+      const { data } = await supabase.from('posts').select('board_slug');
       if (data) {
         const countsObj: Record<string, number> = {};
         data.forEach((post: any) => {
@@ -38,7 +29,6 @@ export default function Home() {
         setCounts(countsObj);
       }
     };
-
     fetchCounts();
   }, []);
 
@@ -69,7 +59,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans flex flex-col">
       
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm relative z-20">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <img 
             src="/logo.png" 
@@ -78,17 +68,44 @@ export default function Home() {
             className="dark:brightness-0 dark:invert" 
           />
           
-          <button 
-            onClick={toggleTheme}
-            className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-            title={isDark ? "Включить светлую тему" : "Включить темную тему"}
-          >
-            {isDark ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-            )}
-          </button>
+          <div className="flex items-center gap-4">
+            {/* Кнопка "Создать тред" с выпадающим меню */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsCreateOpen(!isCreateOpen)}
+                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                Создать тред
+              </button>
+              
+              {isCreateOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
+                  <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
+                  {[...schools, {name: "Общая беседа", slug: "general"}, {name: "Бред", slug: "flood"}].map((b) => (
+                    <a 
+                      key={b.slug} 
+                      href={`/board/${b.slug}`}
+                      className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    >
+                      /{b.slug}/ — {b.name}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+            >
+              {isDark ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -101,7 +118,6 @@ export default function Home() {
         />
       </div>
 
-      {/* НОВЫЕ ВКЛАДКИ: ПРАВИЛА И ИНСТРУКЦИЯ */}
       <div className="max-w-5xl mx-auto px-4 w-full mb-10">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <a href="/rules" className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center gap-4 shadow-sm group">
@@ -182,4 +198,4 @@ export default function Home() {
       </footer>
     </main>
   );
-}
+            }
