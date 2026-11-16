@@ -101,21 +101,28 @@ export default function Home() {
         />
       </div>
 
-      {/* НОВАЯ ПЛАШКА ПРО БЕЗОПАСНОСТЬ */}
-      <div className="max-w-5xl mx-auto px-4 w-full mb-8">
-        <div className="bg-blue-600 dark:bg-blue-700 text-white p-5 rounded-lg shadow-md">
-          <h3 className="text-lg font-bold mb-2 text-center uppercase tracking-wide">
-            ! Важная информация !
-          </h3>
-          <p className="text-sm md:text-base mb-3 text-center">
-            В связи с частыми попытками взломать и заспамить Юрту было принято решение добавить капчу. Это был лишь вопрос времени, поэтому теперь сайт должен стать безопаснее. 
-          </p>
-          <p className="text-sm md:text-base mb-3 text-center">
-            Во время технических работ могли пропасть все, ранее загруженные изображения. Приношу свои извинения за неудобства.
-          </p>
-          <p className="text-xs text-blue-100 text-center">
-            Связь с администрацией: <a href="mailto:officialyurta@gmail.com" className="underline hover:text-white font-medium">officialyurta@gmail.com</a>
-          </p>
+      {/* НОВЫЕ ВКЛАДКИ: ПРАВИЛА И ИНСТРУКЦИЯ */}
+      <div className="max-w-5xl mx-auto px-4 w-full mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <a href="/rules" className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center gap-4 shadow-sm group">
+            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full text-blue-700 dark:text-blue-400 group-hover:scale-110 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-lg">Правила Юрты</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Что можно, а что запрещено</p>
+            </div>
+          </a>
+          
+          <a href="/guide" className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors flex items-center gap-4 shadow-sm group">
+            <div className="bg-emerald-100 dark:bg-emerald-900/30 p-3 rounded-full text-emerald-700 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-lg">Как пользоваться?</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Инструкция для новичков</p>
+            </div>
+          </a>
         </div>
       </div>
 
