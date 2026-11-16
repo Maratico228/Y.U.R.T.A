@@ -117,7 +117,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setIsFetching(true);
     const supabase = getSupabase();
     
-    // Берем посты и сразу сортируем по bumped_at (свежие сверху)
     const { data } = await supabase
       .from('posts')
       .select('*')
@@ -125,7 +124,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       .order('bumped_at', { ascending: false });
     
     if (data) {
-      // Дополнительная сортировка на клиенте для надежности
       const sortedData = [...data].sort((a, b) => {
         const dateA = new Date(a.bumped_at || a.created_at).getTime();
         const dateB = new Date(b.bumped_at || b.created_at).getTime();
@@ -174,17 +172,16 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
-      // Если это ответ на пост, нужно обновить bumped_at у КОРНЕВОГО треда
+      // ИСПРАВЛЕННЫЙ БАМПИНГ
       if (replyTo) {
         const parentPost = posts.find(p => p.id === replyTo.id);
         
-        // Находим корневой ID (если ответили на ответ, берем его родителя)
+        // Определяем корневой ID (если ответ на ответ, берем его родителя)
         let rootId = replyTo.id;
         if (parentPost && parentPost.parent_id) {
-          rootPost = parentPost.parent_id;
+          rootId = parentPost.parent_id;
         }
 
-        // Обновляем время бампа у корневого треда
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
       
@@ -193,7 +190,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setReplyTo(null); 
       setIsSpoiler(false); 
       
-      // Перезапрашиваем посты, чтобы применить сортировку
       await fetchPosts();
       
       setCooldown(true); 
@@ -464,7 +460,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2 font-medium">
-                    ⚠️ {errorMsg}
+                    ОШИБКА: {errorMsg}
                   </div>
                 )}
 
