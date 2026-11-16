@@ -55,6 +55,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const boardInfo: Record<string, { name: string, description: string }> = {
     humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
@@ -86,7 +87,18 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsCreateOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, [params.slug]);
 
   const toggleTheme = () => {
@@ -286,19 +298,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
           </a>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Кнопка "Создать тред" с выпадающим меню */}
-            <div className="relative">
+            <div className="relative" ref={menuRef}>
               <button 
                 onClick={() => setIsCreateOpen(!isCreateOpen)}
-                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-                Создать тред
+                <span className="hidden sm:inline">Создать тред</span>
+                <span className="sm:hidden">Тред</span>
               </button>
               
               {isCreateOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
                   <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
                   {BOARDS.map((b) => (
                     <a 
@@ -315,6 +328,15 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
             <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium hidden sm:block">На главную</a>
             
+            {/* Иконка почты */}
+            <a 
+              href="mailto:officialyurta@gmail.com" 
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" 
+              title="Написать админу"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            </a>
+
             <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
               {isDark ? (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>)}
             </button>
@@ -464,7 +486,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
                         <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
                         
-                        {/* Кнопка Поделиться (только для корневых постов) */}
                         <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2" title="Поделиться">
                           <ShareIcon />
                         </button>
@@ -521,4 +542,4 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       )}
     </main>
   );
-                                                }
+                            }
