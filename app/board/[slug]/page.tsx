@@ -52,6 +52,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaKey, setCaptchaKey] = useState(0); // <--- ДОБАВЛЕНО ДЛЯ СБРОСА КАПЧИ
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -200,6 +201,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     } else {
       setErrorMsg(error.message); 
     }
+    
+    // 4. СБРОС КАПЧИ (чтобы токен не задублировался)
+    setCaptchaToken(null);
+    setCaptchaKey(prev => prev + 1); 
+    
     setLoading(false);
   };
 
@@ -307,7 +313,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           src={url} 
           alt="img" 
           className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} 
-
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
         />
       </div>
@@ -471,7 +476,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 </div>
                 
                 <div className="mt-4 flex justify-center">
-                  <Turnstile siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" onSuccess={(token) => setCaptchaToken(token)} />
+                  {/* СБРОС КАПЧИ ЧЕРЕЗ KEY */}
+                  <Turnstile 
+                    key={captchaKey} 
+                    siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" 
+                    onSuccess={(token) => setCaptchaToken(token)} 
+                  />
                 </div>
 
                 {errorMsg && (
