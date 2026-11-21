@@ -145,6 +145,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setLoading(true);
     const supabase = getSupabase();
 
+    // 1. АВТОРИЗАЦИЯ
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      const { error: authError } = await supabase.auth.signInAnonymously({
+        options: { captchaToken: captchaToken }
+      });
+      if (authError) {
+        setErrorMsg("Ошибка авторизации: " + authError.message);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // 2. ЗАГРУЗКА КАРТИНКИ
     let imageUrl = null;
     if (file) {
       const compressedFile = await compressImage(file);
@@ -160,6 +174,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
+    // 3. СОЗДАНИЕ ПОСТА
     const newPost = { 
       board_slug: params.slug, 
       nickname: nickname.trim() || null, 
@@ -172,28 +187,16 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
-      // ИСПРАВЛЕННЫЙ БАМПИНГ
       if (replyTo) {
         const parentPost = posts.find(p => p.id === replyTo.id);
-        
-        // Определяем корневой ID (если ответ на ответ, берем его родителя)
         let rootId = replyTo.id;
-        if (parentPost && parentPost.parent_id) {
-          rootId = parentPost.parent_id;
-        }
-
+        if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
       
-      setContent(""); 
-      setFile(null); 
-      setReplyTo(null); 
-      setIsSpoiler(false); 
-      
+      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
       await fetchPosts();
-      
-      setCooldown(true); 
-      setTimeout(() => setCooldown(false), 30000);
+      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
     } else {
       setErrorMsg(error.message); 
     }
@@ -282,18 +285,31 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const PostImage = ({ url, isSpoiler, maxH }: { url: string, isSpoiler?: boolean, maxH: string }) => {
     const [revealed, setRevealed] = useState(!isSpoiler);
+
     if (!url) return null;
+
     if (isSpoiler && !revealed) {
       return (
-        <div onClick={() => setRevealed(true)} className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`} style={{ height: '150px', width: '200px' }}>
+        <div 
+          onClick={() => setRevealed(true)}
+          className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`}
+          style={{ height: '150px', width: '200px' }}
+        >
           <span className="text-sm font-bold">СПОЙЛЕР</span>
           <span className="text-xs mt-1">Нажмите, чтобы открыть</span>
         </div>
       );
     }
+
     return (
       <div className="mt-3">
-        <img src={url} alt="img" className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x200?text=Ошибка+загрузки'; }} />
+        <img 
+          src={url} 
+          alt="img" 
+          className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} 
+
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
+        />
       </div>
     );
   };
