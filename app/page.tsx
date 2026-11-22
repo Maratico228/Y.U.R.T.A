@@ -21,6 +21,7 @@ export default function Home() {
   const [posts, setPosts] = useState<any[]>([]);
   const [copied, setCopied] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -121,16 +122,16 @@ export default function Home() {
     );
   };
 
-  // Кнопка "Читать дальше"
+  // Кнопка "Читать дальше" (с нормальным, не жирным шрифтом)
   const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     if (!text) return null;
-    if (text.length <= maxLength) return <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 leading-tight">{text}</h2>;
+    if (text.length <= maxLength) return <h2 className="text-[16px] font-normal text-slate-900 dark:text-white mb-2 leading-relaxed">{text}</h2>;
 
     return (
-      <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2 leading-tight">
+      <h2 className="text-[16px] font-normal text-slate-900 dark:text-white mb-2 leading-relaxed">
         {isExpanded ? text : text.substring(0, maxLength) + '... '}
-        <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-normal ml-1">
+        <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm ml-1">
           {isExpanded ? "Скрыть" : "Читать дальше"}
         </button>
       </h2>
@@ -140,13 +141,36 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-[#0b141a] text-slate-900 dark:text-slate-200 font-sans">
       
+      {/* Возвращенная верхняя панель */}
       <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 py-3 px-4 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <a href="/" className="flex items-center gap-3">
             <img src="/logo.png" alt="Logo" style={{ height: '40px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
-            <span className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider hidden sm:block">Y.U.R.T.A</span>
+            <span className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider sm:hidden">Y.U.R.T.A</span>
           </a>
-          <div className="flex items-center gap-4">
+          
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="relative">
+              <button onClick={() => setIsCreateOpen(!isCreateOpen)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                <span className="hidden sm:inline">Создать тред</span>
+              </button>
+              
+              {isCreateOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1a282d] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
+                  <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
+                  {BOARDS.map((b) => (
+                    <a key={b.slug} href={`/board/${b.slug}`} className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                      /{b.slug}/ — {b.name}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+            <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 font-medium hidden sm:block">Лента</a>
+            <a href="mailto:officialyurta@gmail.com" className="p-2 rounded-lg bg-slate-100 dark:bg-[#121d21] text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors" title="Написать админу">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            </a>
             <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-[#121d21] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
               {isDark ? (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>)}
             </button>
@@ -157,6 +181,12 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-6 flex flex-col lg:flex-row gap-6">
         
         <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4">
+          
+          {/* TITLE.PNG В ЛЕВОМ САЙДБАРЕ (Скриншот 5) */}
+          <div className="hidden lg:flex justify-center w-full mb-2">
+             <img src="/title.png" alt="Y.U.R.T.A Title" className="w-full h-auto object-contain dark:brightness-0 dark:invert" />
+          </div>
+
           <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
@@ -187,12 +217,15 @@ export default function Home() {
 
           <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Доски</h3>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-2">
               {BOARDS.map((school) => (
                 <li key={school.slug}>
-                  <a href={`/board/${school.slug}`} className="text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex justify-between items-center group">
-                    <span className="truncate pr-2">/{school.slug}/</span>
-                    {counts[school.slug] > 0 && <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">{counts[school.slug]}</span>}
+                  <a href={`/board/${school.slug}`} className="text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex justify-between items-start group">
+                    <span className="pr-2 leading-tight">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-500 transition-colors">/{school.slug}/</span><br/>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">{school.name}</span>
+                    </span>
+                    {counts[school.slug] > 0 && <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0 mt-0.5">{counts[school.slug]}</span>}
                   </a>
                 </li>
               ))}
