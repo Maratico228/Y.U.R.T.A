@@ -65,7 +65,8 @@ export default function Home() {
     const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', userId);
     if (data) {
       const votesMap: Record<number, number> = {};
-      data.forEach(v => votesMap[v.post_id] = v.vote_type);
+      // ИСПРАВЛЕНИЕ ЗДЕСЬ
+      data.forEach((v: any) => votesMap[v.post_id] = v.vote_type);
       setUserVotes(votesMap);
     }
   };
@@ -89,7 +90,7 @@ export default function Home() {
 
   const handleVote = async (postId: number, type: 1 | -1) => {
     if (!user) {
-      alert("Пожалуйста, напишите хотя бы один пост на форуме, чтобы получить право голоса (это защита от накрутки).");
+      alert("Пожалуйста, напишите хотя бы один пост на форуме, чтобы получить право голоса.");
       return;
     }
 
@@ -129,7 +130,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-[#0b141a] text-slate-900 dark:text-slate-200 font-sans">
       
-      {/* Шапка */}
       <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 py-3 px-4 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <a href="/">
@@ -143,13 +143,9 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Основной макет (Сайдбар + Лента) */}
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-6 flex flex-col lg:flex-row gap-6">
         
-        {/* ЛЕВЫЙ САЙДБАР (Плашка, правила, доски) */}
         <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4">
-          
-          {/* Плашка */}
           <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
@@ -163,7 +159,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Кнопки правил и инструкции */}
           <div className="flex flex-col gap-2">
             <a href="/rules" className="bg-white dark:bg-[#1a282d] px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 transition-colors flex items-center gap-3 group">
               <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
@@ -179,7 +174,6 @@ export default function Home() {
             </a>
           </div>
 
-          {/* Список досок */}
           <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Доски</h3>
             <ul className="flex flex-col gap-1.5">
@@ -195,7 +189,6 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* ПРАВАЯ КОЛОНКА (Лента) */}
         <div className="w-full lg:w-2/3 xl:w-3/4 flex flex-col gap-3">
           {posts.length === 0 ? (
             <div className="text-center py-20 text-slate-500">Пока нет постов. Создайте первый!</div>
