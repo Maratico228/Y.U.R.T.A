@@ -112,7 +112,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', session.user.id);
       if (data) {
         const votesMap: Record<number, number> = {};
-        // ИСПРАВЛЕНИЕ ЗДЕСЬ
         data.forEach((v: any) => votesMap[v.post_id] = v.vote_type);
         setUserVotes(votesMap);
       }
@@ -196,7 +195,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
     if (!error) {
       if (replyTo) {
-        const parentPost = posts.find(p => p.id === replyTo.id);
+        const parentPost = posts.find((p: any) => p.id === replyTo.id);
         let rootId = replyTo.id;
         if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
         await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
@@ -309,20 +308,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const getReplies = (threadId: number) => {
-    const directReplies = posts.filter(p => p.parent_id === threadId);
+    const directReplies = posts.filter((p: any) => p.parent_id === threadId);
     let allReplies = [...directReplies];
     let lastCount = 0;
     while (lastCount !== allReplies.length) {
       lastCount = allReplies.length;
-      const currentIds = allReplies.map(r => r.id);
-      const nestedReplies = posts.filter(p => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find(ar => ar.id === p.id));
+      const currentIds = allReplies.map((r: any) => r.id);
+      const nestedReplies = posts.filter((p: any) => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find((ar: any) => ar.id === p.id));
       allReplies = [...allReplies, ...nestedReplies];
     }
-    return allReplies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    return allReplies.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   };
 
-  const threads = posts.filter(p => !p.parent_id);
-  const filteredThreads = threads.filter(t => {
+  const threads = posts.filter((p: any) => !p.parent_id);
+  const filteredThreads = threads.filter((t: any) => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return t.content.toLowerCase().includes(query) || (t.nickname && t.nickname.toLowerCase().includes(query));
@@ -440,7 +439,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ⚠️ {errorMsg}
+                    ОШИБКА: {errorMsg}
                   </div>
                 )}
 
@@ -460,7 +459,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           ) : (
             activeTab === 'catalog' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredThreads.map((thread) => {
+                {filteredThreads.map((thread: any) => {
                   const replies = getReplies(thread.id);
                   return (
                     <div key={thread.id} onClick={() => scrollToPost(thread.id)} className="group cursor-pointer bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 flex overflow-hidden h-32">
@@ -488,7 +487,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 })}
               </div>
             ) : (
-              filteredThreads.map((thread) => {
+              filteredThreads.map((thread: any) => {
                 const replies = getReplies(thread.id);
                 return (
                   <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
@@ -527,7 +526,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                     {replies.length > 0 && (
                       <div className="bg-slate-50 dark:bg-[#121d21] flex flex-col">
-                        {replies.map((reply) => (
+                        {replies.map((reply: any) => (
                           <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-800 ml-4 border-l-2 border-l-blue-300 dark:border-l-blue-900">
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
