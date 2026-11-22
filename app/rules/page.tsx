@@ -14,8 +14,8 @@ export default function Rules() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans">
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm mb-8">
+    <main className="min-h-screen bg-slate-100 dark:bg-[#0b141a] text-slate-900 dark:text-slate-200 pb-20 font-sans">
+      <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 py-4 px-4 shadow-sm mb-8">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <a href="/">
             <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
@@ -26,26 +26,26 @@ export default function Rules() {
 
       <div className="max-w-3xl mx-auto px-4">
         <h1 className="text-3xl font-bold mb-6">Правила Юрты</h1>
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700 space-y-4 text-slate-700 dark:text-slate-300">
+        <div className="bg-white dark:bg-[#1a282d] p-6 rounded-lg border border-slate-200 dark:border-slate-800 space-y-4 text-slate-700 dark:text-slate-300">
           <p className="font-bold text-lg text-slate-900 dark:text-white">Юрта — это место для свободного, но уважительного общения студентов ЮГУ.</p>
           
           <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">1. Что здесь можно?</h2>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Обсуждать учёбу, мероприятия и другие интересные темы, не обязательно связанные с ЮГУ</li>
+            <li>Обсуждать учёбу, сессию, преподов (в рамках разумного).</li>
             <li>Делиться мемами, картинками и полезными материалами.</li>
-            <li>Анонимно задавать интересующие вас вопросы и получать помощь.</li>
+            <li>Анонимно задавать вопросы и получать помощь.</li>
           </ul>
 
-          <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">2. Что строго запрещено?</h2>
+          <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">2. Что строго запрещено (бан без предупреждения)?</h2>
           <ul className="list-disc pl-5 space-y-1 text-red-600 dark:text-red-400 font-medium">
             <li>Доксинг (публикация реальных имён, адресов, номеров телефонов без согласия).</li>
             <li>Травля, оскорбления, разжигание конфликтов.</li>
             <li>NSFW-контент (порнография, шок-контент).</li>
-            <li>Спам и навязчивая реклама.</li>
+            <li>Спам и реклама.</li>
           </ul>
 
           <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">3. Анонимность</h2>
-          <p>Юрта не собирает ваши личные данные. Посты и картинки хранятся в базе без привязки к личности.</p>
+          <p>Мы не собираем ваши личные данные. Посты и картинки хранятся в базе без привязки к личности.</p>
         </div>
       </div>
     </main>
