@@ -53,9 +53,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  
-  const [user, setUser] = useState<any>(null);
-  const [userVotes, setUserVotes] = useState<Record<number, number>>({});
 
   const formRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -85,7 +82,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setIsDark(false);
     }
 
-    fetchUserAndVotes();
     fetchPosts();
 
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
@@ -103,20 +99,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [params.slug]);
-
-  const fetchUserAndVotes = async () => {
-    const supabase = getSupabase();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      setUser(session.user);
-      const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', session.user.id);
-      if (data) {
-        const votesMap: Record<number, number> = {};
-        data.forEach((v: any) => votesMap[v.post_id] = v.vote_type);
-        setUserVotes(votesMap);
-      }
-    }
-  };
 
   const toggleTheme = () => {
     if (isDark) {
@@ -136,22 +118,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
     if (data) setPosts(data);
     setIsFetching(false);
-  };
-
-  const handleVote = async (postId: number, type: 1 | -1) => {
-    if (!user) return alert("Авторизуйтесь (отправьте пост), чтобы голосовать.");
-    
-    const supabase = getSupabase();
-    const currentVote = userVotes[postId];
-
-    if (currentVote === type) {
-      await supabase.from('votes').delete().match({ post_id: postId, user_id: user.id });
-      setUserVotes(prev => { const n = {...prev}; delete n[postId]; return n; });
-    } else {
-      await supabase.from('votes').upsert({ post_id: postId, user_id: user.id, vote_type: type }, { onConflict: 'post_id,user_id' });
-      setUserVotes(prev => ({ ...prev, [postId]: type }));
-    }
-    fetchPosts();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -175,22 +141,39 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    let imageUrl = null;
+    let fileUrl = null;
     if (file) {
-      const compressedFile = await compressImage(file);
-      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(safeFileName, compressedFile, { contentType: 'image/jpeg', upsert: false });
+      const isVideo = file.type.startsWith('video/');
+      const isImage = file.type.startsWith('image/');
+      // Жесткие лимиты для безопасности БД
+      const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024);
+
+      if (file.size > maxSize) {
+        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : (isImage ? '5' : '10')} МБ.`);
+        setLoading(false);
+        return;
+      }
+
+      let fileToUpload = file;
+      // Конвертация картинок в WebP для экономии места
+      if (isImage) {
+        fileToUpload = await compressImage(file);
+      }
+
+      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${file.name.substring(file.name.lastIndexOf('.'))}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(safeFileName, fileToUpload, { upsert: false });
+      
       if (!uploadError && uploadData) {
         const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
-        imageUrl = urlData.publicUrl;
+        fileUrl = urlData.publicUrl;
       } else {
-        setErrorMsg("Ошибка при загрузке картинки.");
+        setErrorMsg("Ошибка при загрузке файла.");
         setLoading(false);
         return;
       }
     }
 
-    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
+    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: fileUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
@@ -222,12 +205,19 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 600; 
+          const MAX_WIDTH = 1200; 
           const scale = Math.min(1, MAX_WIDTH / img.width); 
           canvas.width = img.width * scale; canvas.height = img.height * scale;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob((blob) => { if (blob) resolve(new File([blob], "image.jpg", { type: 'image/jpeg' })); }, 'image/jpeg', 0.7);
+          
+          // Пробуем WebP (он легче)
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
+              resolve(new File([blob], `image${ext}`, { type: blob.type }));
+            }
+          }, 'image/webp', 0.85);
         };
       };
     });
@@ -289,21 +279,49 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
 
-  const PostImage = ({ url, isSpoiler, maxH }: { url: string, isSpoiler?: boolean, maxH: string }) => {
+  const PostMedia = ({ url, isSpoiler }: { url: string, isSpoiler?: boolean }) => {
     const [revealed, setRevealed] = useState(!isSpoiler);
+    
     if (!url) return null;
+    
     if (isSpoiler && !revealed) {
       return (
-        <div onClick={() => setRevealed(true)} className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`} style={{ height: '150px', width: '200px' }}>
+        <div onClick={() => setRevealed(true)} className="mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500" style={{ height: '150px', width: '200px' }}>
           <span className="text-sm font-bold">СПОЙЛЕР</span>
           <span className="text-xs mt-1">Нажмите, чтобы открыть</span>
         </div>
       );
     }
+
+    const isVideo = url.match(/\.(mp4|webm|mov)$/i);
+    const isImage = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+    if (isVideo) {
+      return (
+        <div className="mt-3 rounded overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+          <video src={url} controls className="w-full h-auto max-h-[400px] object-contain" />
+        </div>
+      );
+    }
+
+    if (isImage) {
+      return (
+        <div className="mt-3">
+          <img src={url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+      );
+    }
+
     return (
-      <div className="mt-3">
-        <img src={url} alt="img" className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-      </div>
+      <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mt-3 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition-colors">
+        <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded text-blue-600">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-slate-800 dark:text-white truncate">Прикрепленный файл</p>
+          <p className="text-xs text-slate-500">Нажмите, чтобы скачать</p>
+        </div>
+      </a>
     );
   };
 
@@ -335,6 +353,22 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const ArrowUpIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>);
   const WarningIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>);
   const ShareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>);
+
+  // Компонент "Читать дальше" для доски
+  const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    if (!text) return null;
+    if (text.length <= maxLength) return <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(text)}</div>;
+
+    return (
+      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
+        {isExpanded ? renderContent(text) : renderContent(text.substring(0, maxLength) + '... ')}
+        <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-normal ml-1">
+          {isExpanded ? "Скрыть" : "Читать дальше"}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
@@ -422,8 +456,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                   <div className="flex items-center gap-4">
                     <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <ImageIcon /> <span>{file ? file.name : "Картинка"}</span>
-                      <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
+                      <ImageIcon /> <span>{file ? file.name : "Прикрепить файл"}</span>
+                      <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.zip,.rar" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
                     </label>
                     {file && (
                       <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
@@ -492,36 +526,24 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 return (
                   <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
                     
-                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex gap-3">
-                      <div className="flex flex-col items-center gap-1 shrink-0 bg-slate-50 dark:bg-[#121d21] p-1.5 rounded-md h-fit">
-                        <button onClick={() => handleVote(thread.id, 1)} className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 ${userVotes[thread.id] === 1 ? 'text-blue-600 dark:text-blue-500' : 'text-slate-400'}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
+                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
+                        <span className="text-xs text-slate-400">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
+                        <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
+                        <span className="text-xs text-slate-400 ml-2">Ответов: {replies.length}</span>
+                        
+                        <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2">
+                          <ShareIcon />
                         </button>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {(thread.likes || 0) - (thread.dislikes || 0)}
-                        </span>
-                        <button onClick={() => handleVote(thread.id, -1)} className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 ${userVotes[thread.id] === -1 ? 'text-red-500' : 'text-slate-400'}`}>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-                        </button>
+                        <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2">
+                          <WarningIcon />
+                        </a>
                       </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
-                          <span className="text-xs text-slate-400">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
-                          <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
-                          <span className="text-xs text-slate-400 ml-2">Ответов: {replies.length}</span>
-                          
-                          <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2">
-                            <ShareIcon />
-                          </button>
-                          <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2">
-                            <WarningIcon />
-                          </a>
-                        </div>
-                        <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                        <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
-                      </div>
+                      
+                      <ExpandableText text={thread.content} />
+                      
+                      <PostMedia url={thread.image_url} isSpoiler={thread.is_spoiler} />
                     </div>
 
                     {replies.length > 0 && (
@@ -534,7 +556,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                               <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
                             </div>
                             <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                            <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
+                            <PostMedia url={reply.image_url} isSpoiler={reply.is_spoiler} />
                             <div className="mt-2 flex justify-end">
                               <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
                             </div>
