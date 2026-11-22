@@ -145,7 +145,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (file) {
       const isVideo = file.type.startsWith('video/');
       const isImage = file.type.startsWith('image/');
-      // Жесткие лимиты для безопасности БД
       const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024);
 
       if (file.size > maxSize) {
@@ -155,7 +154,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
 
       let fileToUpload = file;
-      // Конвертация картинок в WebP для экономии места
       if (isImage) {
         fileToUpload = await compressImage(file);
       }
@@ -211,7 +209,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
           
-          // Пробуем WebP (он легче)
           canvas.toBlob((blob) => {
             if (blob) {
               const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
@@ -354,7 +351,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const WarningIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>);
   const ShareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>);
 
-  // Компонент "Читать дальше" для доски
   const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     if (!text) return null;
