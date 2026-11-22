@@ -18,7 +18,6 @@ const PNG_EMOJIS = [
   "laugh", "cry", "cool", "angry", "think"
 ];
 
-// УБРАЛИ EDUCATION
 const BOARDS = [
   { name: "Высшая школа гуманитарных наук", slug: "humanities" },
   { name: "Инженерная школа цифровых технологий", slug: "engineering" },
@@ -113,7 +112,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', session.user.id);
       if (data) {
         const votesMap: Record<number, number> = {};
-        data.forEach(v => votesMap[v.post_id] = v.vote_type);
+        // ИСПРАВЛЕНИЕ ЗДЕСЬ
+        data.forEach((v: any) => votesMap[v.post_id] = v.vote_type);
         setUserVotes(votesMap);
       }
     }
@@ -166,7 +166,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setLoading(true);
     const supabase = getSupabase();
 
-    // Авторизация
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
@@ -177,7 +176,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // Картинка
     let imageUrl = null;
     if (file) {
       const compressedFile = await compressImage(file);
@@ -193,7 +191,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // Создание поста
     const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
     const { error } = await supabase.from('posts').insert([newPost]);
 
@@ -443,7 +440,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ОШИБКА: {errorMsg}
+                    ⚠️ {errorMsg}
                   </div>
                 )}
 
@@ -496,9 +493,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 return (
                   <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
                     
-                    {/* Пост (с лайками как в ленте) */}
                     <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex gap-3">
-                      {/* Блок лайков */}
                       <div className="flex flex-col items-center gap-1 shrink-0 bg-slate-50 dark:bg-[#121d21] p-1.5 rounded-md h-fit">
                         <button onClick={() => handleVote(thread.id, 1)} className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 ${userVotes[thread.id] === 1 ? 'text-blue-600 dark:text-blue-500' : 'text-slate-400'}`}>
                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
@@ -511,7 +506,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         </button>
                       </div>
 
-                      {/* Контент */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
@@ -531,7 +525,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       </div>
                     </div>
 
-                    {/* Ответы */}
                     {replies.length > 0 && (
                       <div className="bg-slate-50 dark:bg-[#121d21] flex flex-col">
                         {replies.map((reply) => (
