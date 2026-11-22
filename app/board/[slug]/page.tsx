@@ -351,21 +351,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const WarningIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>);
   const ShareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>);
 
-  const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    if (!text) return null;
-    if (text.length <= maxLength) return <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(text)}</div>;
-
-    return (
-      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">
-        {isExpanded ? renderContent(text) : renderContent(text.substring(0, maxLength) + '... ')}
-        <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm font-normal ml-1">
-          {isExpanded ? "Скрыть" : "Читать дальше"}
-        </button>
-      </div>
-    );
-  };
-
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
       <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 py-4 px-4 shadow-sm mb-8 relative z-20 sticky top-0">
@@ -537,7 +522,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                         </a>
                       </div>
                       
-                      <ExpandableText text={thread.content} />
+                      {/* Убрали ExpandableText, теперь текст выводится полностью */}
+                      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
                       
                       <PostMedia url={thread.image_url} isSpoiler={thread.is_spoiler} />
                     </div>
