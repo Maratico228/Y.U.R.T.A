@@ -18,10 +18,10 @@ const PNG_EMOJIS = [
   "laugh", "cry", "cool", "angry", "think"
 ];
 
+// УБРАЛИ EDUCATION
 const BOARDS = [
   { name: "Высшая школа гуманитарных наук", slug: "humanities" },
   { name: "Инженерная школа цифровых технологий", slug: "engineering" },
-  { name: "Центр образовательного инжиниринга", slug: "education" },
   { name: "Высшая школа физической культуры и спорта", slug: "sport" },
   { name: "Высшая экологическая школа", slug: "ecology" },
   { name: "Высшая школа цифровой экономики", slug: "economy" },
@@ -52,8 +52,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0); // <--- ДОБАВЛЕНО ДЛЯ СБРОСА КАПЧИ
+  const [captchaKey, setCaptchaKey] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  const [user, setUser] = useState<any>(null);
+  const [userVotes, setUserVotes] = useState<Record<number, number>>({});
 
   const formRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -61,7 +64,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const boardInfo: Record<string, { name: string, description: string }> = {
     humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
     engineering: { name: "Инженерная школа", description: "Беседа Инженерной школы цифровых технологий." },
-    education: { name: "Образовательный инжиниринг", description: "Беседа Центра образовательного инжиниринга." },
     sport: { name: "Физкультура и спорт", description: "Беседа Высшей школы физической культуры и спорта." },
     ecology: { name: "Экологическая школа", description: "Беседа Высшей экологической школы." },
     economy: { name: "Цифровая экономика", description: "Беседа Высшей школы цифровой экономики." },
@@ -69,7 +71,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     law: { name: "Школа права", description: "Беседа Высшей школы права." },
     polytech: { name: "Политехническая школа", description: "Беседа Политехнической школы." },
     general: { name: "Общая беседа", description: "Общая беседа без определенной тематики." },
-    flood: { name: "Бред", description: "Раздел \"Бред\". Беседа с минимальным уровнем цензуры и без определенной тематики." },
+    flood: { name: "Бред", description: "Раздел \"Бред\". Беседа с минимальным уровнем цензуры." },
   };
 
   const currentBoard = boardInfo[params.slug] || { name: params.slug, description: `Беседа в разделе /${params.slug}/.` };
@@ -84,6 +86,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setIsDark(false);
     }
 
+    fetchUserAndVotes();
     fetchPosts();
 
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
@@ -102,6 +105,20 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     };
   }, [params.slug]);
 
+  const fetchUserAndVotes = async () => {
+    const supabase = getSupabase();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', session.user.id);
+      if (data) {
+        const votesMap: Record<number, number> = {};
+        data.forEach(v => votesMap[v.post_id] = v.vote_type);
+        setUserVotes(votesMap);
+      }
+    }
+  };
+
   const toggleTheme = () => {
     if (isDark) {
       document.documentElement.classList.remove("dark");
@@ -117,22 +134,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const fetchPosts = async () => {
     setIsFetching(true);
     const supabase = getSupabase();
-    
-    const { data } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('board_slug', params.slug)
-      .order('bumped_at', { ascending: false });
-    
-    if (data) {
-      const sortedData = [...data].sort((a, b) => {
-        const dateA = new Date(a.bumped_at || a.created_at).getTime();
-        const dateB = new Date(b.bumped_at || b.created_at).getTime();
-        return dateB - dateA;
-      });
-      setPosts(sortedData);
-    }
+    const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
+    if (data) setPosts(data);
     setIsFetching(false);
+  };
+
+  const handleVote = async (postId: number, type: 1 | -1) => {
+    if (!user) return alert("Авторизуйтесь (отправьте пост), чтобы голосовать.");
+    
+    const supabase = getSupabase();
+    const currentVote = userVotes[postId];
+
+    if (currentVote === type) {
+      await supabase.from('votes').delete().match({ post_id: postId, user_id: user.id });
+      setUserVotes(prev => { const n = {...prev}; delete n[postId]; return n; });
+    } else {
+      await supabase.from('votes').upsert({ post_id: postId, user_id: user.id, vote_type: type }, { onConflict: 'post_id,user_id' });
+      setUserVotes(prev => ({ ...prev, [postId]: type }));
+    }
+    fetchPosts();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,18 +160,16 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setErrorMsg(null);
     
     if (!content.trim()) return;
-    if (cooldown) return setErrorMsg("Подождите 30 секунд перед следующей отправкой!");
-    if (!captchaToken) return setErrorMsg("Пожалуйста, подтвердите, что вы не робот (капча внизу).");
+    if (cooldown) return setErrorMsg("Подождите 30 секунд!");
+    if (!captchaToken) return setErrorMsg("Пожалуйста, подтвердите, что вы не робот.");
 
     setLoading(true);
     const supabase = getSupabase();
 
-    // 1. АВТОРИЗАЦИЯ
+    // Авторизация
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      const { error: authError } = await supabase.auth.signInAnonymously({
-        options: { captchaToken: captchaToken }
-      });
+      const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
       if (authError) {
         setErrorMsg("Ошибка авторизации: " + authError.message);
         setLoading(false);
@@ -159,7 +177,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // 2. ЗАГРУЗКА КАРТИНКИ
+    // Картинка
     let imageUrl = null;
     if (file) {
       const compressedFile = await compressImage(file);
@@ -169,22 +187,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
         imageUrl = urlData.publicUrl;
       } else {
-        setErrorMsg("Ошибка при загрузке картинки: " + (uploadError?.message || "Неизвестная ошибка"));
+        setErrorMsg("Ошибка при загрузке картинки.");
         setLoading(false);
         return;
       }
     }
 
-    // 3. СОЗДАНИЕ ПОСТА
-    const newPost = { 
-      board_slug: params.slug, 
-      nickname: nickname.trim() || null, 
-      content: content.trim(), 
-      image_url: imageUrl, 
-      parent_id: replyTo ? replyTo.id : null, 
-      is_spoiler: isSpoiler 
-    };
-    
+    // Создание поста
+    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: imageUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
     const { error } = await supabase.from('posts').insert([newPost]);
 
     if (!error) {
@@ -202,10 +212,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setErrorMsg(error.message); 
     }
     
-    // 4. СБРОС КАПЧИ (чтобы токен не задублировался)
     setCaptchaToken(null);
     setCaptchaKey(prev => prev + 1); 
-    
     setLoading(false);
   };
 
@@ -232,11 +240,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const handleShare = (postId: number) => {
     const url = `https://y-u-r-t-a.ru/board/${params.slug}#post-${postId}`;
     const text = `Читай интересные темы на "Юрте"! ${url}`;
-    navigator.clipboard.writeText(text).then(() => {
-      alert("Ссылка скопирована! Можете отправить её другу.");
-    }).catch(err => {
-      console.error('Ошибка копирования: ', err);
-    });
+    navigator.clipboard.writeText(text).then(() => alert("Ссылка скопирована!"));
   };
 
   const handleReplyClick = (postId: number) => {
@@ -291,30 +295,18 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const PostImage = ({ url, isSpoiler, maxH }: { url: string, isSpoiler?: boolean, maxH: string }) => {
     const [revealed, setRevealed] = useState(!isSpoiler);
-
     if (!url) return null;
-
     if (isSpoiler && !revealed) {
       return (
-        <div 
-          onClick={() => setRevealed(true)}
-          className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`}
-          style={{ height: '150px', width: '200px' }}
-        >
+        <div onClick={() => setRevealed(true)} className={`mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500`} style={{ height: '150px', width: '200px' }}>
           <span className="text-sm font-bold">СПОЙЛЕР</span>
           <span className="text-xs mt-1">Нажмите, чтобы открыть</span>
         </div>
       );
     }
-
     return (
       <div className="mt-3">
-        <img 
-          src={url} 
-          alt="img" 
-          className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} 
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
-        />
+        <img src={url} alt="img" className={`max-w-full h-auto ${maxH} rounded border border-slate-200 dark:border-slate-700 object-contain`} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       </div>
     );
   };
@@ -349,8 +341,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const ShareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>);
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
-      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 py-4 px-4 shadow-sm mb-8 relative z-20">
+    <main className="min-h-screen bg-slate-50 dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
+      <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 py-4 px-4 shadow-sm mb-8 relative z-20 sticky top-0">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <a href="/">
             <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
@@ -358,42 +350,27 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="relative" ref={menuRef}>
-              <button 
-                onClick={() => setIsCreateOpen(!isCreateOpen)}
-                className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base"
-              >
+              <button onClick={() => setIsCreateOpen(!isCreateOpen)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 <span className="hidden sm:inline">Создать тред</span>
-                <span className="sm:hidden">Тред</span>
               </button>
               
               {isCreateOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1a282d] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
                   <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
                   {BOARDS.map((b) => (
-                    <a 
-                      key={b.slug} 
-                      href={`/board/${b.slug}`}
-                      className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                    >
+                    <a key={b.slug} href={`/board/${b.slug}`} className="block px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       /{b.slug}/ — {b.name}
                     </a>
                   ))}
                 </div>
               )}
             </div>
-
-            <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium hidden sm:block">На главную</a>
-            
-            <a 
-              href="mailto:officialyurta@gmail.com" 
-              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors" 
-              title="Написать админу"
-            >
+            <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 font-medium hidden sm:block">Лента</a>
+            <a href="mailto:officialyurta@gmail.com" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors" title="Написать админу">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
             </a>
-
-            <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600">
+            <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
               {isDark ? (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>)}
             </button>
           </div>
@@ -402,97 +379,77 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
       <div className="max-w-5xl mx-auto px-4">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2 uppercase">/{params.slug}/</h1>
+          <h1 className="text-3xl font-bold mb-2 uppercase">/{params.slug}/</h1>
           <h2 className="text-xl font-bold text-blue-800 dark:text-blue-400 mb-1">{currentBoard.name}</h2>
           <p className="text-slate-500 dark:text-slate-400">{currentBoard.description}</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-[#1a282d] p-2 rounded-lg border border-slate-200 dark:border-slate-800">
           <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Доска</button>
-            <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-700 text-blue-800 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>Каталог</button>
+            <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Доска</button>
+            <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Каталог</button>
           </div>
           
           <div className="relative w-full sm:w-64">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon /></div>
-            <input type="text" placeholder="Поиск по тредам..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-600 bg-transparent rounded pl-10 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-blue-500" />
+            <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 bg-transparent rounded pl-10 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
           </div>
         </div>
 
         {activeTab === 'board' && (
-          <div ref={formRef} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm mb-8 relative overflow-hidden">
+          <div ref={formRef} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8 relative overflow-hidden">
             <div className="p-6">
-              <h2 className="text-lg font-bold mb-4 dark:text-slate-100">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
-              {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить ответ</button>}
+              <h2 className="text-lg font-bold mb-4">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
+              {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить</button>}
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center">
-                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 font-medium bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-600">
-                      <SmileIcon /> {showEmojis ? "Свернуть эмоджи" : "Показать эмоджи"}
+                 <div className="flex gap-2 mb-2">
+                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700">
+                      <SmileIcon /> Эмоджи
                     </button>
-                  </div>
-                  {showEmojis && (
-                    <div className="flex flex-col gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
-                      <div>
-                        <p className="text-xs text-slate-400 mb-1">Эмотиконы:</p>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 max-h-32 overflow-y-auto">
-                          {TEXT_EMOJIS.map((emoji) => (
-                            <button key={emoji} type="button" onClick={() => insertEmoji(emoji, false)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 px-1 py-2 rounded font-mono flex items-center justify-center break-all">{emoji}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                        <p className="text-xs text-slate-400 mb-1">Эмоджи:</p>
-                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                          {PNG_EMOJIS.map((name) => (
-                            <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-800 rounded" title={`:${name}:`}>
-                               <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 hover:opacity-100 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                            </button>
-                          ))}
-                        </div>
+                 </div>
+                 {showEmojis && (
+                    <div className="p-3 bg-slate-50 dark:bg-[#121d21] rounded border border-slate-200 dark:border-slate-800 mb-2">
+                      <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                        {PNG_EMOJIS.map((name) => (
+                          <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded">
+                             <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
+                          </button>
+                        ))}
                       </div>
                     </div>
-                  )}
-                </div>
+                 )}
 
-                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border rounded px-3 py-2 text-sm bg-transparent text-slate-900 dark:text-slate-100 focus:outline-none border-slate-300 dark:border-slate-600 focus:border-blue-500" />
-                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-600 bg-transparent text-slate-900 dark:text-slate-100 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
+                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                   <div className="flex items-center gap-4">
-                    <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-slate-100 dark:file:bg-slate-700 file:text-slate-700 dark:file:text-slate-300 hover:file:bg-slate-200 dark:hover:file:bg-slate-600 flex items-center gap-2">
-                      <ImageIcon /> <span>{file ? file.name : "Прикрепить картинку"}</span>
+                    <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                      <ImageIcon /> <span>{file ? file.name : "Картинка"}</span>
                       <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
                     </label>
-
                     {file && (
                       <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-                        <input type="checkbox" checked={isSpoiler} onChange={(e) => setIsSpoiler(e.target.checked)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
-                        Скрыть под спойлер
+                        <input type="checkbox" checked={isSpoiler} onChange={(e) => setIsSpoiler(e.target.checked)} className="w-4 h-4" /> Спойлер
                       </label>
                     )}
                   </div>
                 </div>
                 
                 <div className="mt-4 flex justify-center">
-                  {/* СБРОС КАПЧИ ЧЕРЕЗ KEY */}
-                  <Turnstile 
-                    key={captchaKey} 
-                    siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" 
-                    onSuccess={(token) => setCaptchaToken(token)} 
-                  />
+                  <Turnstile key={captchaKey} siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" onSuccess={(token) => setCaptchaToken(token)} />
                 </div>
 
                 {errorMsg && (
-                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2 font-medium">
+                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
                     ОШИБКА: {errorMsg}
                   </div>
                 )}
 
                 <div className="flex justify-end mt-2">
-                  <button type="submit" disabled={loading || cooldown} className={`font-bold text-sm sm:text-base py-1.5 sm:py-2 px-4 sm:px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 dark:bg-slate-600 text-white cursor-not-allowed' : 'bg-blue-700 dark:bg-blue-600 text-white hover:bg-teal-700 dark:hover:bg-teal-600'}`}>
-                    {loading ? "Отправка..." : cooldown ? "Ждите 30 сек..." : "Отправить"}
+                  <button type="submit" disabled={loading || cooldown} className={`font-bold py-2 px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 text-white' : 'bg-blue-700 text-white hover:bg-blue-600'}`}>
+                    {loading ? "Отправка..." : cooldown ? "Ждите..." : "Отправить"}
                   </button>
                 </div>
               </form>
@@ -500,33 +457,31 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         )}
 
-        <div className="flex flex-col gap-6">
-          {isFetching ? (
-            <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">Загрузка тредов...</div>
-          ) : filteredThreads.length === 0 ? (
-            <div className="text-center text-slate-500 dark:text-slate-400 py-10 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">{searchQuery ? "Ничего не найдено." : "Здесь пока нет тредов. Будь первым!"}</div>
+        <div className="flex flex-col gap-4">
+          {filteredThreads.length === 0 ? (
+            <div className="text-center text-slate-500 py-10">Пусто...</div>
           ) : (
             activeTab === 'catalog' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredThreads.map((thread) => {
                   const replies = getReplies(thread.id);
                   return (
-                    <div key={thread.id} onClick={() => scrollToPost(thread.id)} className="group cursor-pointer bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm hover:border-blue-400 dark:hover:border-blue-500 flex overflow-hidden transition-colors h-32">
+                    <div key={thread.id} onClick={() => scrollToPost(thread.id)} className="group cursor-pointer bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 flex overflow-hidden h-32">
                       {thread.image_url && !thread.is_spoiler ? (
-                        <div className="w-24 bg-slate-100 dark:bg-slate-900 flex-shrink-0 border-r border-slate-200 dark:border-slate-700">
+                        <div className="w-24 bg-slate-100 dark:bg-[#121d21] shrink-0 border-r border-slate-200 dark:border-slate-700">
                           <img src={thread.image_url} alt="thumb" className="w-full h-full object-cover" />
                         </div>
                       ) : (
-                        <div className="w-24 bg-slate-100 dark:bg-slate-900 flex-shrink-0 border-r border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 dark:text-slate-600">
+                        <div className="w-24 bg-slate-100 dark:bg-[#121d21] shrink-0 border-r border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400">
                           <ImageIcon />
                         </div>
                       )}
                       <div className="p-3 flex flex-col justify-between flex-grow min-w-0">
                         <div>
-                          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{thread.nickname || "Аноним"}</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 leading-snug break-words">{thread.content}</p>
+                          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate mb-1">{thread.nickname || "Аноним"}</h3>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 break-words">{thread.content}</p>
                         </div>
-                        <div className="flex justify-between items-center mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                        <div className="flex justify-between items-center mt-2 text-[11px] text-slate-400">
                           <span>№{thread.id}</span>
                           <span>Ответов: {replies.length}</span>
                         </div>
@@ -539,44 +494,55 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               filteredThreads.map((thread) => {
                 const replies = getReplies(thread.id);
                 return (
-                  <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
-                    <div className="p-5 border-b border-slate-100 dark:border-slate-700">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{thread.id}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500 ml-2">Ответов: {replies.length}</span>
-                        
-                        <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2" title="Поделиться">
-                          <ShareIcon />
+                  <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
+                    
+                    {/* Пост (с лайками как в ленте) */}
+                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex gap-3">
+                      {/* Блок лайков */}
+                      <div className="flex flex-col items-center gap-1 shrink-0 bg-slate-50 dark:bg-[#121d21] p-1.5 rounded-md h-fit">
+                        <button onClick={() => handleVote(thread.id, 1)} className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 ${userVotes[thread.id] === 1 ? 'text-blue-600 dark:text-blue-500' : 'text-slate-400'}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg>
                         </button>
-
-                        <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
-                          <WarningIcon />
-                        </a>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          {(thread.likes || 0) - (thread.dislikes || 0)}
+                        </span>
+                        <button onClick={() => handleVote(thread.id, -1)} className={`p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 ${userVotes[thread.id] === -1 ? 'text-red-500' : 'text-slate-400'}`}>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                        </button>
                       </div>
-                      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                      
-                      <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
+
+                      {/* Контент */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
+                          <span className="text-xs text-slate-400">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
+                          <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
+                          <span className="text-xs text-slate-400 ml-2">Ответов: {replies.length}</span>
+                          
+                          <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2">
+                            <ShareIcon />
+                          </button>
+                          <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2">
+                            <WarningIcon />
+                          </a>
+                        </div>
+                        <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
+                        <PostImage url={thread.image_url} isSpoiler={thread.is_spoiler} maxH="max-h-[400px]" />
+                      </div>
                     </div>
 
+                    {/* Ответы */}
                     {replies.length > 0 && (
-                      <div className="bg-white dark:bg-slate-800 flex flex-col">
+                      <div className="bg-slate-50 dark:bg-[#121d21] flex flex-col">
                         {replies.map((reply) => (
-                          <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-700 ml-4 border-l-2 border-l-blue-200 dark:border-l-blue-900">
+                          <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-800 ml-4 border-l-2 border-l-blue-300 dark:border-l-blue-900">
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
-                              <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
-                              <span className="text-xs text-slate-400 dark:text-slate-500 ml-auto">№{reply.id}</span>
-                              
-                              <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${reply.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2" title="Пожаловаться">
-                                <WarningIcon />
-                              </a>
+                              <span className="text-xs text-slate-400">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
+                              <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
                             </div>
                             <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                            
                             <PostImage url={reply.image_url} isSpoiler={reply.is_spoiler} maxH="max-h-[300px]" />
-                            
                             <div className="mt-2 flex justify-end">
                               <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
                             </div>
@@ -585,8 +551,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                       </div>
                     )}
 
-                    <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                      <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:text-teal-700 dark:hover:text-teal-400 font-medium">Ответить в тред</button>
+                    <div className="p-3 bg-white dark:bg-[#1a282d] border-t border-slate-100 dark:border-slate-800">
+                      <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:underline font-medium">Ответить в тред</button>
                     </div>
                   </div>
                 );
