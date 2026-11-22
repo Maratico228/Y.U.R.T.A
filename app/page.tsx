@@ -65,7 +65,6 @@ export default function Home() {
     const { data } = await supabase.from('votes').select('post_id, vote_type').eq('user_id', userId);
     if (data) {
       const votesMap: Record<number, number> = {};
-      // ИСПРАВЛЕНИЕ ЗДЕСЬ
       data.forEach((v: any) => votesMap[v.post_id] = v.vote_type);
       setUserVotes(votesMap);
     }
@@ -80,11 +79,14 @@ export default function Home() {
       .order('created_at', { ascending: false });
 
     if (data) {
-      const postsWithCounts = await Promise.all(data.map(async (post) => {
+      // ИСПРАВЛЕНИЕ ЗДЕСЬ: (post: any)
+      const postsWithCounts = await Promise.all(data.map(async (post: any) => {
         const { count } = await supabase.from('posts').select('*', { count: 'exact', head: true }).eq('parent_id', post.id);
         return { ...post, replyCount: count || 0 };
       }));
-      setPosts(postsWithCounts.filter(p => !p.parent_id));
+      
+      // ИСПРАВЛЕНИЕ ЗДЕСЬ: (p: any)
+      setPosts(postsWithCounts.filter((p: any) => !p.parent_id));
     }
   };
 
@@ -193,7 +195,7 @@ export default function Home() {
           {posts.length === 0 ? (
             <div className="text-center py-20 text-slate-500">Пока нет постов. Создайте первый!</div>
           ) : (
-            posts.map((post) => (
+            posts.map((post: any) => (
               <article key={post.id} className="bg-white dark:bg-[#1a282d] rounded-md border border-slate-200 dark:border-slate-800 flex hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                 
                 <div className="w-10 sm:w-12 bg-slate-50 dark:bg-[#121d21] rounded-l-md flex flex-col items-center py-2 gap-1 shrink-0">
