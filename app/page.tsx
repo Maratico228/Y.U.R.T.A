@@ -16,13 +16,16 @@ const BOARDS = [
   { name: "Раздел бред", slug: "flood" },
 ];
 
+// РАСШИРЕННЫЙ СПИСОК ТЕКСТОВЫХ СМАЙЛОВ
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
   "ヽ(´ー｀)┌", "＼(＾▽＾)／", "(⌐■_■)", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥",
   "(´・ω・`)", "(╥﹏╥)", "ヽ(`Д´)ﾉ", "(╬ Ò﹏Ó)", "(ﾉಥ益ಥ）ﾉ",
   "(っ °Д °;)っ", "┻━┻ ︵ヽ(`Д´)ﾉ︵﻿ ┻━┻", "(ಥ﹏ಥ)", "(T_T)", "( •̀ ω •́ )",
   "(☞ﾟヮﾟ)☞", "(•_•) ( •_•)>⌐■-■", "༼ つ ◕_◕ ༽つ", "(• ε •)", "( ͠° ͟ʖ ͡°)",
-  "ᕕ( ᐛ )ᕗ", "( ͡~ ͜ʖ ͡°)", "ლ(ಠ益ಠლ)", "(ง ͠° ͟ل͜ ͡°)ง", "(´･ω･`)"
+  "ᕕ( ᐛ )ᕗ", "( ͡~ ͜ʖ ͡°)", "ლ(ಠ益ಠლ)", "(ง ͠° ͟ل͜ ͡°)ง", "(´･ω･`)",
+  "ʕ•ᴥ•ʔ", "( ˘ ³˘)♥", "( ͡ຈ ͜ʖ ͡ຈ)", "ヽ༼ຈل͜ຈ༽ﾉ", "(☞ﾟ∀ﾟ)☞",
+  "(*・ω・)ﾉ", "(/・ω・)/", "(´∀｀)♡", "(*/ω＼*)", "(๑•̀ㅂ•́)و✧"
 ];
 
 const PNG_EMOJIS = [
@@ -36,8 +39,6 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  
-  // Состояние для выдвижных ответов
   const [expandedReplies, setExpandedReplies] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -68,7 +69,6 @@ export default function Home() {
 
   const fetchGlobalFeed = async () => {
     const supabase = getSupabase();
-    // Берем ВСЕ посты, включая ответы, чтобы правильно посчитать
     const { data } = await supabase
       .from('posts')
       .select('*')
@@ -78,7 +78,6 @@ export default function Home() {
     if (data) {
       const roots = data.filter((p: any) => !p.parent_id);
       
-      // Собираем всех потомков для каждого корневого поста
       const rootsWithReplies = roots.map((root: any) => {
         const allDescendants: any[] = [];
         const queue = [root.id];
@@ -90,9 +89,7 @@ export default function Home() {
           queue.push(...children.map((c: any) => c.id));
         }
 
-        // Сортируем ответы по времени (старые сверху)
         allDescendants.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        
         return { ...root, replies: allDescendants };
       });
       
@@ -101,10 +98,7 @@ export default function Home() {
   };
 
   const toggleReplies = (postId: number) => {
-    setExpandedReplies(prev => ({
-      ...prev,
-      [postId]: !prev[postId]
-    }));
+    setExpandedReplies(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
 
   const handleShare = (postId: number, slug: string) => {
@@ -131,13 +125,12 @@ export default function Home() {
     });
   };
 
-  // Функция рендера текста с эмодзи и ссылками (Защита от XSS)
   const renderContent = (text: string) => {
     if (!text) return null;
     let formattedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
-      return `<a href="/board/${posts.find(p => p.id === parseInt(id))?.board_slug || 'general'}#post-${id}" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+      return `<a href="/board/${posts.find((p:any) => p.id === parseInt(id))?.board_slug || 'general'}#post-${id}" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
     PNG_EMOJIS.forEach(name => {
@@ -306,7 +299,6 @@ export default function Home() {
               return (
                 <article key={post.id} className="bg-white dark:bg-[#1a282d] rounded-md border border-slate-200 dark:border-slate-800 flex flex-col hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
                   
-                  {/* Тело поста */}
                   <div className="p-3 sm:p-4">
                     <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
                       <a href={`/board/${post.board_slug}`} className="font-bold text-slate-700 dark:text-slate-300 hover:underline">/{post.board_slug}/</a>
@@ -320,7 +312,6 @@ export default function Home() {
                     <RenderMedia url={post.image_url} />
                   </div>
 
-                  {/* Панель действий */}
                   <div className="flex items-center gap-4 px-3 sm:px-4 pb-3 mt-1">
                     <button 
                       onClick={() => toggleReplies(post.id)} 
@@ -341,7 +332,6 @@ export default function Home() {
                     </a>
                   </div>
 
-                  {/* Выдвижной блок с ответами */}
                   {isExpanded && post.replies.length > 0 && (
                     <div className="bg-slate-50 dark:bg-[#121d21] border-t border-slate-100 dark:border-slate-800 p-3 sm:p-4 flex flex-col gap-3">
                       {post.replies.map((reply: any) => (
