@@ -36,7 +36,7 @@ export default function Rules() {
             <li>Анонимно задавать интересующие вас вопросы и получать помощь.</li>
           </ul>
 
-          <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">2. Что строго запрещено (бан без предупреждения)?</h2>
+          <h2 className="text-xl font-bold mt-4 text-slate-900 dark:text-white">2. Что строго запрещено?</h2>
           <ul className="list-disc pl-5 space-y-1 text-red-600 dark:text-red-400 font-medium">
             <li>Доксинг (публикация реальных имён, адресов, номеров телефонов без согласия).</li>
             <li>Травля, оскорбления, разжигание конфликтов.</li>
