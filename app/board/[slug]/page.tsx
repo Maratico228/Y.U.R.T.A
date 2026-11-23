@@ -1,8 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react"; 
 import { getSupabase } from "@/lib/supabase";
-import { Turnstile } from "@marsidev/react-turnstile";
+
+const BOARDS = [
+  { name: "Высшая школа гуманитарных наук", slug: "humanities" },
+  { name: "Инженерная школа цифровых технологий", slug: "engineering" },
+  { name: "Высшая школа физической культуры и спорта", slug: "sport" },
+  { name: "Высшая экологическая школа", slug: "ecology" },
+  { name: "Высшая школа цифровой экономики", slug: "economy" },
+  { name: "Высшая нефтяная школа", slug: "oil" },
+  { name: "Высшая школа права", slug: "law" },
+  { name: "Политехническая школа", slug: "polytech" },
+  { name: "Общая беседа", slug: "general" },
+  { name: "Раздел бред", slug: "flood" },
+];
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -18,87 +30,87 @@ const PNG_EMOJIS = [
   "laugh", "cry", "cool", "angry", "think"
 ];
 
-const BOARDS = [
-  { name: "Высшая школа гуманитарных наук", slug: "humanities" },
-  { name: "Инженерная школа цифровых технологий", slug: "engineering" },
-  { name: "Высшая школа физической культуры и спорта", slug: "sport" },
-  { name: "Высшая экологическая школа", slug: "ecology" },
-  { name: "Высшая школа цифровой экономики", slug: "economy" },
-  { name: "Высшая нефтяная школа", slug: "oil" },
-  { name: "Высшая школа права", slug: "law" },
-  { name: "Политехническая школа", slug: "polytech" },
-  { name: "Общая беседа", slug: "general" },
-  { name: "Раздел бред", slug: "flood" },
-];
-
-export default function BoardPage({ params }: { params: { slug: string } }) {
+export default function Home() {
+  const [isDark, setIsDark] = useState(true);
   const [posts, setPosts] = useState<any[]>([]);
-  const [nickname, setNickname] = useState("");
-  const [content, setContent] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [isSpoiler, setIsSpoiler] = useState(false);
-  
-  const [loading, setLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
-  const [replyTo, setReplyTo] = useState<any>(null);
-  
-  const [cooldown, setCooldown] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
-  const [showEmojis, setShowEmojis] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const formRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const boardInfo: Record<string, { name: string, description: string }> = {
-    humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
-    engineering: { name: "Инженерная школа", description: "Беседа Инженерной школы цифровых технологий." },
-    sport: { name: "Физкультура и спорт", description: "Беседа Высшей школы физической культуры и спорта." },
-    ecology: { name: "Экологическая школа", description: "Беседа Высшей экологической школы." },
-    economy: { name: "Цифровая экономика", description: "Беседа Высшей школы цифровой экономики." },
-    oil: { name: "Нефтяная школа", description: "Беседа Высшей нефтяной школы." },
-    law: { name: "Школа права", description: "Беседа Высшей школы права." },
-    polytech: { name: "Политехническая школа", description: "Беседа Политехнической школы." },
-    general: { name: "Общая беседа", description: "Общая беседа без определенной тематики." },
-    flood: { name: "Бред", description: "Раздел \"Бред\". Беседа с минимальным уровнем цензуры." },
-  };
-
-  const currentBoard = boardInfo[params.slug] || { name: params.slug, description: `Беседа в разделе /${params.slug}/.` };
+  // Состояние для выдвижных ответов
+  const [expandedReplies, setExpandedReplies] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "dark") {
+    if (savedTheme !== "light") {
       document.documentElement.classList.add("dark");
       setIsDark(true);
-    } else if (savedTheme === "light") {
+    } else {
       document.documentElement.classList.remove("dark");
       setIsDark(false);
     }
 
-    fetchPosts();
+    fetchGlobalFeed();
+    fetchCounts();
+  }, []);
 
-    const handleScroll = () => setShowScrollTop(window.scrollY > 500);
-    window.addEventListener('scroll', handleScroll);
+  const fetchCounts = async () => {
+    const supabase = getSupabase();
+    const { data } = await supabase.from('posts').select('board_slug');
+    if (data) {
+      const countsObj: Record<string, number> = {};
+      data.forEach((post: any) => {
+        countsObj[post.board_slug] = (countsObj[post.board_slug] || 0) + 1;
+      });
+      setCounts(countsObj);
+    }
+  };
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsCreateOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
+  const fetchGlobalFeed = async () => {
+    const supabase = getSupabase();
+    // Берем ВСЕ посты, включая ответы, чтобы правильно посчитать
+    const { data } = await supabase
+      .from('posts')
+      .select('*')
+      .neq('board_slug', 'education')
+      .order('created_at', { ascending: false });
 
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [params.slug]);
+    if (data) {
+      const roots = data.filter((p: any) => !p.parent_id);
+      
+      // Собираем всех потомков для каждого корневого поста
+      const rootsWithReplies = roots.map((root: any) => {
+        const allDescendants: any[] = [];
+        const queue = [root.id];
+
+        while (queue.length > 0) {
+          const currentId = queue.shift();
+          const children = data.filter((p: any) => p.parent_id === currentId);
+          allDescendants.push(...children);
+          queue.push(...children.map((c: any) => c.id));
+        }
+
+        // Сортируем ответы по времени (старые сверху)
+        allDescendants.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        
+        return { ...root, replies: allDescendants };
+      });
+      
+      setPosts(rootsWithReplies);
+    }
+  };
+
+  const toggleReplies = (postId: number) => {
+    setExpandedReplies(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
+
+  const handleShare = (postId: number, slug: string) => {
+    const url = `https://y-u-r-t-a.ru/board/${slug}#post-${postId}`;
+    navigator.clipboard.writeText(url).then(() => alert("Ссылка скопирована!"));
+  };
 
   const toggleTheme = () => {
     if (isDark) {
@@ -112,157 +124,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     }
   };
 
-  const fetchPosts = async () => {
-    setIsFetching(true);
-    const supabase = getSupabase();
-    const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
-    if (data) setPosts(data);
-    setIsFetching(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    
-    if (!content.trim()) return;
-    if (cooldown) return setErrorMsg("Подождите 30 секунд!");
-    if (!captchaToken) return setErrorMsg("Пожалуйста, подтвердите, что вы не робот.");
-
-    setLoading(true);
-    const supabase = getSupabase();
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
-      if (authError) {
-        setErrorMsg("Ошибка авторизации: " + authError.message);
-        setLoading(false);
-        return;
-      }
-    }
-
-    let fileUrl = null;
-    if (file) {
-      const isVideo = file.type.startsWith('video/');
-      const isImage = file.type.startsWith('image/');
-      const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024);
-
-      if (file.size > maxSize) {
-        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : (isImage ? '5' : '10')} МБ.`);
-        setLoading(false);
-        return;
-      }
-
-      let fileToUpload = file;
-      if (isImage) {
-        fileToUpload = await compressImage(file);
-      }
-
-      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${file.name.substring(file.name.lastIndexOf('.'))}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(safeFileName, fileToUpload, { upsert: false });
-      
-      if (!uploadError && uploadData) {
-        const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
-        fileUrl = urlData.publicUrl;
-      } else {
-        setErrorMsg("Ошибка при загрузке файла.");
-        setLoading(false);
-        return;
-      }
-    }
-
-    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: fileUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
-    const { error } = await supabase.from('posts').insert([newPost]);
-
-    if (!error) {
-      if (replyTo) {
-        const parentPost = posts.find((p: any) => p.id === replyTo.id);
-        let rootId = replyTo.id;
-        if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
-        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
-      }
-      
-      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
-      await fetchPosts();
-      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
-    } else {
-      setErrorMsg(error.message); 
-    }
-    
-    setCaptchaToken(null);
-    setCaptchaKey(prev => prev + 1); 
-    setLoading(false);
-  };
-
-  const compressImage = (file: File): Promise<File> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 1200; 
-          const scale = Math.min(1, MAX_WIDTH / img.width); 
-          canvas.width = img.width * scale; canvas.height = img.height * scale;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
-              resolve(new File([blob], `image${ext}`, { type: blob.type }));
-            }
-          }, 'image/webp', 0.85);
-        };
-      };
+  const copyLink = () => {
+    navigator.clipboard.writeText("https://y-u-r-t-a.ru").then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
     });
   };
 
-  const handleShare = (postId: number) => {
-    const url = `https://y-u-r-t-a.ru/board/${params.slug}#post-${postId}`;
-    const text = `Читай интересные темы на "Юрте"! ${url}`;
-    navigator.clipboard.writeText(text).then(() => alert("Ссылка скопирована!"));
-  };
-
-  const handleReplyClick = (postId: number) => {
-    setReplyTo({ id: postId });
-    setActiveTab('board');
-    setContent(prev => {
-      const cleanPrev = prev.replace(/^>>\d+\n/, "");
-      return `>>${postId}\n${cleanPrev}`;
-    });
-    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-  };
-
-  const scrollToPost = (postId: number) => {
-    setActiveTab('board');
-    setTimeout(() => {
-      const el = document.getElementById(`post-${postId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10');
-        setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000);
-      }
-    }, 100);
-  };
-
-  const insertEmoji = (emoji: string, isPng: boolean = false) => {
-    if (isPng) setContent(prev => prev + ` :${emoji}: `);
-    else setContent(prev => prev + " " + emoji + " ");
-  };
-
+  // Функция рендера текста с эмодзи и ссылками (Защита от XSS)
   const renderContent = (text: string) => {
+    if (!text) return null;
     let formattedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
     formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
-      return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
+      return `<a href="/board/${posts.find(p => p.id === parseInt(id))?.board_slug || 'general'}#post-${id}" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
     PNG_EMOJIS.forEach(name => {
       formattedText = formattedText.split(`:${name}:`).join(
-        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-6 h-6 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
+        `<img src="/emojis/${name}.png" alt="${name}" class="inline-block w-5 h-5 mx-1 align-text-bottom dark:brightness-0 dark:invert" onerror="this.style.display='none'" />`
       );
     });
 
@@ -276,43 +156,29 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
 
-  const PostMedia = ({ url, isSpoiler }: { url: string, isSpoiler?: boolean }) => {
-    const [revealed, setRevealed] = useState(!isSpoiler);
-    
+  const RenderMedia = ({ url }: { url: string }) => {
     if (!url) return null;
-    
-    if (isSpoiler && !revealed) {
-      return (
-        <div onClick={() => setRevealed(true)} className="mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500" style={{ height: '150px', width: '200px' }}>
-          <span className="text-sm font-bold">СПОЙЛЕР</span>
-          <span className="text-xs mt-1">Нажмите, чтобы открыть</span>
-        </div>
-      );
-    }
-
     const isVideo = url.match(/\.(mp4|webm|mov)$/i);
     const isImage = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
 
     if (isVideo) {
       return (
-        <div className="mt-3 rounded overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
+        <div className="mb-3 rounded overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
           <video src={url} controls className="w-full h-auto max-h-[400px] object-contain" />
         </div>
       );
     }
-
     if (isImage) {
       return (
-        <div className="mt-3">
-          <img src={url} alt="img" className="max-w-full h-auto max-h-[400px] rounded border border-slate-200 dark:border-slate-700 object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+        <div className="mb-3 rounded overflow-hidden border border-slate-200 dark:border-slate-700">
+          <img src={url} alt="post" className="w-full h-auto max-h-[400px] object-contain" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
         </div>
       );
     }
-
     return (
-      <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mt-3 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition-colors">
+      <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 mb-3 bg-slate-50 dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 transition-colors">
         <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded text-blue-600">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{url.split('/').pop() || "Прикрепленный файл"}</p>
@@ -322,45 +188,33 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     );
   };
 
-  const getReplies = (threadId: number) => {
-    const directReplies = posts.filter((p: any) => p.parent_id === threadId);
-    let allReplies = [...directReplies];
-    let lastCount = 0;
-    while (lastCount !== allReplies.length) {
-      lastCount = allReplies.length;
-      const currentIds = allReplies.map((r: any) => r.id);
-      const nestedReplies = posts.filter((p: any) => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find((ar: any) => ar.id === p.id));
-      allReplies = [...allReplies, ...nestedReplies];
-    }
-    return allReplies.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    if (!text) return null;
+    if (text.length <= maxLength) return <div className="text-[15px] text-slate-900 dark:text-white mb-2 leading-relaxed whitespace-pre-wrap">{renderContent(text)}</div>;
+
+    return (
+      <div className="text-[15px] text-slate-900 dark:text-white mb-2 leading-relaxed whitespace-pre-wrap">
+        {isExpanded ? renderContent(text) : renderContent(text.substring(0, maxLength) + '... ')}
+        <button onClick={() => setIsExpanded(!isExpanded)} className="text-blue-600 dark:text-blue-400 hover:underline text-sm ml-1">
+          {isExpanded ? "Скрыть" : "Читать дальше"}
+        </button>
+      </div>
+    );
   };
 
-  const threads = posts.filter((p: any) => !p.parent_id);
-  const filteredThreads = threads.filter((t: any) => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      return t.content.toLowerCase().includes(query) || (t.nickname && t.nickname.toLowerCase().includes(query));
-    }
-    return true;
-  });
-
-  const SearchIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-slate-400 dark:text-slate-500"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>);
-  const ImageIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>);
-  const SmileIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></svg>);
-  const ArrowUpIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6"/></svg>);
-  const WarningIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>);
-  const ShareIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>);
-
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-[#0b141a] text-slate-900 dark:text-slate-100 pb-20 font-sans relative">
-      <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 py-4 px-4 shadow-sm mb-8 relative z-20 sticky top-0">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <a href="/">
-            <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
+    <main className="min-h-screen bg-slate-100 dark:bg-[#0b141a] text-slate-900 dark:text-slate-200 font-sans">
+      
+      <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 py-3 px-4 shadow-sm">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <a href="/" className="flex items-center gap-3">
+            <img src="/logo.png" alt="Logo" style={{ height: '40px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
+            <span className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-wider sm:hidden">Y.U.R.T.A</span>
           </a>
           
           <div className="flex items-center gap-3 sm:gap-4">
-            <div className="relative" ref={menuRef}>
+            <div className="relative">
               <button onClick={() => setIsCreateOpen(!isCreateOpen)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 <span className="hidden sm:inline">Создать тред</span>
@@ -378,190 +232,147 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               )}
             </div>
             <a href="/" className="text-blue-700 dark:text-blue-400 hover:text-teal-700 font-medium hidden sm:block">Лента</a>
-            <a href="mailto:officialyurta@gmail.com" className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors" title="Написать админу">
+            <a href="mailto:officialyurta@gmail.com" className="p-2 rounded-lg bg-slate-100 dark:bg-[#121d21] text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors" title="Написать админу">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
             </a>
-            <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors">
+            <button onClick={toggleTheme} className="p-2 rounded-lg bg-slate-100 dark:bg-[#121d21] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
               {isDark ? (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>)}
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 uppercase">/{params.slug}/</h1>
-          <h2 className="text-xl font-bold text-blue-800 dark:text-blue-400 mb-1">{currentBoard.name}</h2>
-          <p className="text-slate-500 dark:text-slate-400">{currentBoard.description}</p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 bg-white dark:bg-[#1a282d] p-2 rounded-lg border border-slate-200 dark:border-slate-800">
-          <div className="flex gap-2 w-full sm:w-auto">
-            <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Доска</button>
-            <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Каталог</button>
-          </div>
+      <div className="max-w-6xl mx-auto px-2 sm:px-4 py-6 flex flex-col lg:flex-row gap-6">
+        
+        <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4">
           
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon /></div>
-            <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 bg-transparent rounded pl-10 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+          <div className="hidden lg:flex justify-center w-full mb-2">
+             <img src="/title.png" alt="Y.U.R.T.A Title" className="w-full h-auto object-contain dark:brightness-0 dark:invert" />
           </div>
-        </div>
 
-        {activeTab === 'board' && (
-          <div ref={formRef} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm mb-8 relative overflow-hidden">
-            <div className="p-6">
-              <h2 className="text-lg font-bold mb-4">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
-              {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить</button>}
-              
-              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                 <div className="flex gap-2 mb-2">
-                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700">
-                      <SmileIcon /> Эмоджи
-                    </button>
-                 </div>
-                 {showEmojis && (
-                    <div className="p-3 bg-slate-50 dark:bg-[#121d21] rounded border border-slate-200 dark:border-slate-800 mb-2">
-                      <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                        {PNG_EMOJIS.map((name) => (
-                          <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded">
-                             <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                 )}
-
-                <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
-                
-                <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
-                  <div className="flex items-center gap-4">
-                    <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <ImageIcon /> <span>{file ? file.name : "Прикрепить файл"}</span>
-                      <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.zip,.rar" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
-                    </label>
-                    {file && (
-                      <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-                        <input type="checkbox" checked={isSpoiler} onChange={(e) => setIsSpoiler(e.target.checked)} className="w-4 h-4" /> Спойлер
-                      </label>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="mt-4 flex justify-center">
-                  <Turnstile key={captchaKey} siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" onSuccess={(token) => setCaptchaToken(token)} />
-                </div>
-
-                {errorMsg && (
-                  <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ОШИБКА: {errorMsg}
-                  </div>
-                )}
-
-                <div className="flex justify-end mt-2">
-                  <button type="submit" disabled={loading || cooldown} className={`font-bold py-2 px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 text-white' : 'bg-blue-700 text-white hover:bg-blue-600'}`}>
-                    {loading ? "Отправка..." : cooldown ? "Ждите..." : "Отправить"}
-                  </button>
-                </div>
-              </form>
+          <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+              <h2 className="text-sm font-bold uppercase tracking-wide">Важно</h2>
             </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+              Юрта продолжает подвергаться атакам, но мы держим оборону! Пожалуйста, поделитесь ссылкой на сайт в своих студенческих чатах.
+            </p>
+            <button onClick={copyLink} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-blue-100 dark:bg-slate-800 text-blue-700 dark:text-blue-300 hover:bg-blue-200'}`}>
+              {copied ? "Скопировано!" : "Скопировать ссылку"}
+            </button>
           </div>
-        )}
 
-        <div className="flex flex-col gap-4">
-          {filteredThreads.length === 0 ? (
-            <div className="text-center text-slate-500 py-10">Пусто...</div>
-          ) : (
-            activeTab === 'catalog' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredThreads.map((thread: any) => {
-                  const replies = getReplies(thread.id);
-                  return (
-                    <div key={thread.id} onClick={() => scrollToPost(thread.id)} className="group cursor-pointer bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 flex overflow-hidden h-32">
-                      {thread.image_url && !thread.is_spoiler ? (
-                        <div className="w-24 bg-slate-100 dark:bg-[#121d21] shrink-0 border-r border-slate-200 dark:border-slate-700">
-                          <img src={thread.image_url} alt="thumb" className="w-full h-full object-cover" />
-                        </div>
-                      ) : (
-                        <div className="w-24 bg-slate-100 dark:bg-[#121d21] shrink-0 border-r border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400">
-                          <ImageIcon />
-                        </div>
-                      )}
-                      <div className="p-3 flex flex-col justify-between flex-grow min-w-0">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate mb-1">{thread.nickname || "Аноним"}</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-3 break-words">{thread.content}</p>
-                        </div>
-                        <div className="flex justify-between items-center mt-2 text-[11px] text-slate-400">
-                          <span>№{thread.id}</span>
-                          <span>Ответов: {replies.length}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+          <div className="flex flex-col gap-2">
+            <a href="/rules" className="bg-white dark:bg-[#1a282d] px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 transition-colors flex items-center gap-3 group">
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-2 rounded text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
               </div>
-            ) : (
-              filteredThreads.map((thread: any) => {
-                const replies = getReplies(thread.id);
-                return (
-                  <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
+              <div className="font-bold text-sm">Правила Юрты</div>
+            </a>
+            <a href="/guide" className="bg-white dark:bg-[#1a282d] px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-400 transition-colors flex items-center gap-3 group">
+              <div className="bg-emerald-50 dark:bg-emerald-900/30 p-2 rounded text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+              </div>
+              <div className="font-bold text-sm">Как пользоваться?</div>
+            </a>
+          </div>
+
+          <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Доски</h3>
+            <ul className="flex flex-col gap-2">
+              {BOARDS.map((school) => (
+                <li key={school.slug}>
+                  <a href={`/board/${school.slug}`} className="text-sm text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 flex justify-between items-start group">
+                    <span className="pr-2 leading-tight">
+                      <span className="font-bold text-slate-800 dark:text-slate-200 group-hover:text-blue-500 transition-colors">/{school.slug}/</span><br/>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">{school.name}</span>
+                    </span>
+                    {counts[school.slug] > 0 && <span className="text-xs bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0 mt-0.5">{counts[school.slug]}</span>}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+
+        <div className="w-full lg:w-2/3 xl:w-3/4 flex flex-col gap-4">
+          {posts.length === 0 ? (
+            <div className="text-center py-20 text-slate-500">Пока нет постов. Создайте первый!</div>
+          ) : (
+            posts.map((post: any) => {
+              const isExpanded = expandedReplies[post.id];
+              
+              return (
+                <article key={post.id} className="bg-white dark:bg-[#1a282d] rounded-md border border-slate-200 dark:border-slate-800 flex flex-col hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+                  
+                  {/* Тело поста */}
+                  <div className="p-3 sm:p-4">
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
+                      <a href={`/board/${post.board_slug}`} className="font-bold text-slate-700 dark:text-slate-300 hover:underline">/{post.board_slug}/</a>
+                      <span>•</span>
+                      <span>{new Date(post.created_at).toLocaleDateString('ru-RU')}</span>
+                      <span>•</span>
+                      <span className="text-blue-600 dark:text-blue-400">{post.nickname || "Аноним"}</span>
+                    </div>
+
+                    <ExpandableText text={post.content} />
+                    <RenderMedia url={post.image_url} />
+                  </div>
+
+                  {/* Панель действий */}
+                  <div className="flex items-center gap-4 px-3 sm:px-4 pb-3 mt-1">
+                    <button 
+                      onClick={() => toggleReplies(post.id)} 
+                      className={`flex items-center gap-2 text-xs font-bold px-2 py-1.5 rounded transition-colors ${isExpanded ? 'bg-blue-100 dark:bg-slate-800 text-blue-700 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+                      {post.replies.length} Ответов
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
                     
-                    <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
-                        <span className="text-xs text-slate-400">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
-                        <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
-                        <span className="text-xs text-slate-400 ml-2">Ответов: {replies.length}</span>
-                        
-                        <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2">
-                          <ShareIcon />
-                        </button>
-                        <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${thread.id}&body=Причина: `} className="text-slate-400 hover:text-red-500 ml-2">
-                          <WarningIcon />
+                    <button onClick={() => handleShare(post.id, post.board_slug)} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                      Поделиться
+                    </button>
+                    <a href={`mailto:officialyurta@gmail.com?subject=Жалоба на пост №${post.id}&body=Причина: `} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded transition-colors ml-auto sm:ml-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+                      Жалоба
+                    </a>
+                  </div>
+
+                  {/* Выдвижной блок с ответами */}
+                  {isExpanded && post.replies.length > 0 && (
+                    <div className="bg-slate-50 dark:bg-[#121d21] border-t border-slate-100 dark:border-slate-800 p-3 sm:p-4 flex flex-col gap-3">
+                      {post.replies.map((reply: any) => (
+                        <div key={reply.id} className="text-sm pl-3 border-l-2 border-slate-300 dark:border-slate-700">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
+                              {reply.nickname || "Аноним"}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(reply.created_at).toLocaleString('ru-RU')}
+                            </span>
+                          </div>
+                          <div className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{renderContent(reply.content)}</div>
+                          <RenderMedia url={reply.image_url} />
+                        </div>
+                      ))}
+                      
+                      <div className="mt-2 text-center">
+                        <a href={`/board/${post.board_slug}#post-${post.id}`} className="inline-block text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline bg-blue-50 dark:bg-slate-800 px-4 py-2 rounded-full">
+                          Перейти в тред для ответа
                         </a>
                       </div>
-                      
-                      <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                      
-                      <PostMedia url={thread.image_url} isSpoiler={thread.is_spoiler} />
                     </div>
-
-                    {replies.length > 0 && (
-                      <div className="bg-slate-50 dark:bg-[#121d21] flex flex-col">
-                        {replies.map((reply: any) => (
-                          <div id={`post-${reply.id}`} key={reply.id} className="p-4 border-t border-slate-100 dark:border-slate-800 ml-4 border-l-2 border-l-blue-300 dark:border-l-blue-900">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`font-bold text-sm ${reply.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{reply.nickname || "Аноним"}</span>
-                              <span className="text-xs text-slate-400">{new Date(reply.created_at).toLocaleString('ru-RU')}</span>
-                              <span className="text-xs text-slate-400 ml-auto">№{reply.id}</span>
-                            </div>
-                            <div className="text-slate-800 dark:text-slate-200 text-sm whitespace-pre-wrap">{renderContent(reply.content)}</div>
-                            <PostMedia url={reply.image_url} isSpoiler={reply.is_spoiler} />
-                            <div className="mt-2 flex justify-end">
-                              <button onClick={() => handleReplyClick(reply.id)} className="text-xs text-slate-400 hover:text-blue-500">Ответить</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="p-3 bg-white dark:bg-[#1a282d] border-t border-slate-100 dark:border-slate-800">
-                      <button onClick={() => handleReplyClick(thread.id)} className="text-sm text-blue-700 dark:text-blue-400 hover:underline font-medium">Ответить в тред</button>
-                    </div>
-                  </div>
-                );
-              })
-            )
+                  )}
+                </article>
+              );
+            })
           )}
         </div>
-      </div>
 
-      {showScrollTop && (
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="fixed bottom-6 right-6 p-3 bg-blue-700 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all z-50">
-          <ArrowUpIcon />
-        </button>
-      )}
+      </div>
     </main>
   );
 }
