@@ -58,8 +58,9 @@ export default function Home() {
       .order('created_at', { ascending: false });
 
     if (data) {
+      // Для каждого поста считаем ВСЕ ответы (включая вложенные)
       const postsWithCounts = await Promise.all(data.map(async (post: any) => {
-        const { count } = await supabase.from('posts').select('*', { count: 'exact', head: true }).eq('parent_id', post.id);
+        const { count, error } = await supabase.rpc('get_total_replies', { p_thread_id: post.id });
         return { ...post, replyCount: count || 0 };
       }));
       setPosts(postsWithCounts.filter((p: any) => !p.parent_id));
@@ -90,7 +91,7 @@ export default function Home() {
     });
   };
 
-  const RenderMedia = ({ url }: { url: string }) => {
+  const RenderMedia = ({ url, fileName }: { url: string, fileName?: string }) => {
     if (!url) return null;
     const isVideo = url.match(/\.(mp4|webm|mov)$/i);
     const isImage = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
@@ -115,14 +116,13 @@ export default function Home() {
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-800 dark:text-white truncate">Прикрепленный файл</p>
+          <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{fileName || "Прикрепленный файл"}</p>
           <p className="text-xs text-slate-500">Нажмите, чтобы скачать</p>
         </div>
       </a>
     );
   };
 
-  // Кнопка "Читать дальше" (с нормальным, не жирным шрифтом)
   const ExpandableText = ({ text, maxLength = 200 }: { text: string, maxLength?: number }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     if (!text) return null;
@@ -141,7 +141,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-100 dark:bg-[#0b141a] text-slate-900 dark:text-slate-200 font-sans">
       
-      {/* Возвращенная верхняя панель */}
       <header className="bg-white dark:bg-[#1a282d] border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 py-3 px-4 shadow-sm">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <a href="/" className="flex items-center gap-3">
@@ -182,7 +181,6 @@ export default function Home() {
         
         <aside className="w-full lg:w-1/3 xl:w-1/4 flex flex-col gap-4">
           
-          {/* TITLE.PNG В ЛЕВОМ САЙДБАРЕ (Скриншот 5) */}
           <div className="hidden lg:flex justify-center w-full mb-2">
              <img src="/title.png" alt="Y.U.R.T.A Title" className="w-full h-auto object-contain dark:brightness-0 dark:invert" />
           </div>
@@ -250,12 +248,13 @@ export default function Home() {
 
                 <ExpandableText text={post.content} />
 
-                <RenderMedia url={post.image_url} />
+                <RenderMedia url={post.image_url} fileName={post.image_url?.split('/').pop()} />
 
                 <div className="flex items-center gap-4 mt-2">
+                  {/* Исправлено: «Ответы» вместо «Комментарии», ведет на конкретный пост */}
                   <a href={`/board/${post.board_slug}#post-${post.id}`} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-                    {post.replyCount} Комментариев
+                    {post.replyCount} Ответов
                   </a>
                   <button onClick={() => handleShare(post.id, post.board_slug)} className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
