@@ -454,7 +454,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ⚠️ {errorMsg}
+                    ОШИБКА: {errorMsg}
                   </div>
                 )}
 
