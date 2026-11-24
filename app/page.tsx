@@ -16,7 +16,8 @@ const BOARDS = [
   { name: "Раздел бред", slug: "flood" },
 ];
 
-// РАСШИРЕННЫЙ СПИСОК ТЕКСТОВЫХ СМАЙЛОВ
+const DAILY_NEWS = "Добро пожаловать на Юрту! Это текст-заглушка для новости дня. Вы можете изменить его в коде (переменная DAILY_NEWS).";
+
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
   "ヽ(´ー｀)┌", "＼(＾▽＾)／", "(⌐■_■)", "(☭ ͜ʖ ☭)", "( ˘ ³˘)♥",
@@ -39,6 +40,7 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isNewsOpen, setIsNewsOpen] = useState(false); // Стейт для Новости Дня
   const [expandedReplies, setExpandedReplies] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
@@ -153,11 +155,19 @@ export default function Home() {
     if (!url) return null;
     const isVideo = url.match(/\.(mp4|webm|mov)$/i);
     const isImage = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    const isAudio = url.match(/\.(mp3|wav|ogg|m4a)$/i); // Проверка на аудио
 
     if (isVideo) {
       return (
         <div className="mb-3 rounded overflow-hidden border border-slate-200 dark:border-slate-700 bg-black">
           <video src={url} controls className="w-full h-auto max-h-[400px] object-contain" />
+        </div>
+      );
+    }
+    if (isAudio) {
+      return (
+        <div className="mb-3 mt-2">
+          <audio src={url} controls className="w-full max-w-md" />
         </div>
       );
     }
@@ -207,6 +217,12 @@ export default function Home() {
           </a>
           
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* Кнопка Новость дня */}
+            <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              <span className="hidden sm:inline">Новость дня</span>
+            </button>
+
             <div className="relative">
               <button onClick={() => setIsCreateOpen(!isCreateOpen)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -234,6 +250,19 @@ export default function Home() {
           </div>
         </div>
       </header>
+
+      {/* Выдвижная панель Новость дня */}
+      {isNewsOpen && (
+        <div className="bg-blue-50 dark:bg-[#121d21] border-b border-blue-200 dark:border-slate-800 p-4 shadow-inner">
+          <div className="max-w-6xl mx-auto">
+            <h3 className="font-bold text-blue-800 dark:text-blue-400 mb-1 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Новость дня
+            </h3>
+            <p className="text-slate-700 dark:text-slate-300 text-sm">{DAILY_NEWS}</p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto px-2 sm:px-4 py-6 flex flex-col lg:flex-row gap-6">
         
