@@ -434,7 +434,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
-              <span className="hidden sm:inline">ОБНОВЛЕНИЕ</span>
+              <span className="hidden sm:inline">Новость дня</span>
             </button>
 
             <div className="relative" ref={menuRef}>
@@ -470,7 +470,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <div className="max-w-5xl mx-auto">
             <h3 className="font-bold text-blue-800 dark:text-blue-400 mb-1 flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              Новость дня
+              ОБНОВЛЕНИЕ!
             </h3>
             <p className="text-slate-700 dark:text-slate-300 text-sm">{DAILY_NEWS}</p>
           </div>
