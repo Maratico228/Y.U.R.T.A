@@ -33,6 +33,8 @@ const BOARDS = [
   { name: "Раздел бред", slug: "flood" },
 ];
 
+const DAILY_NEWS = "Добро пожаловать на Юрту! Это текст-заглушка для новости дня. Вы можете изменить его в коде (переменная DAILY_NEWS).";
+
 export default function BoardPage({ params }: { params: { slug: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
   const [nickname, setNickname] = useState("");
@@ -52,6 +54,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isDark, setIsDark] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isNewsOpen, setIsNewsOpen] = useState(false); // Стейт для Новости Дня
   
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
@@ -59,6 +62,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const formRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // Ref для вставки смайлов по курсору
 
   const boardInfo: Record<string, { name: string, description: string }> = {
     humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
@@ -134,7 +138,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setLoading(true);
     const supabase = getSupabase();
 
-    // 1. Авторизация (нужна для загрузки файла в Storage)
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
@@ -145,15 +148,17 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // 2. Загрузка файла (остается на клиенте, но защищена RLS Storage)
     let fileUrl = null;
     if (file) {
       const isVideo = file.type.startsWith('video/');
       const isImage = file.type.startsWith('image/');
-      const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024);
+      const isAudio = file.type.startsWith('audio/'); // Проверка на аудио
+      
+      // Лимиты: видео 10МБ, картинки 5МБ, аудио 15МБ, остальное 10МБ
+      const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : (isAudio ? 15 * 1024 * 1024 : 10 * 1024 * 1024));
 
       if (file.size > maxSize) {
-        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : (isImage ? '5' : '10')} МБ.`);
+        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : (isImage ? '5' : (isAudio ? '15' : '10'))} МБ.`);
         setLoading(false);
         return;
       }
@@ -176,7 +181,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // 3. ВЫЗОВ EDGE FUNCTION (Серверная вставка с проверкой капчи)
+    // ВЫЗОВ EDGE FUNCTION (Серверная вставка с проверкой капчи)
     const { data: fnData, error: fnError } = await supabase.functions.invoke('create-post', {
       body: {
         board_slug: params.slug,
@@ -185,7 +190,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         image_url: fileUrl,
         parent_id: replyTo ? replyTo.id : null,
         is_spoiler: isSpoiler,
-        captchaToken: captchaToken, // Передаем токен для проверки на сервере
+        captchaToken: captchaToken,
       },
     });
 
@@ -195,7 +200,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       return;
     }
 
-    // 4. Обновление бампа (если это ответ)
+    // Обновление бампа (если это ответ)
     if (replyTo) {
       const parentPost = posts.find((p: any) => p.id === replyTo.id);
       let rootId = replyTo.id;
@@ -266,9 +271,25 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     }, 100);
   };
 
+  // ВСТАВКА СМАЙЛОВ ПО КУРСОРУ
   const insertEmoji = (emoji: string, isPng: boolean = false) => {
-    if (isPng) setContent(prev => prev + ` :${emoji}: `);
-    else setContent(prev => prev + " " + emoji + " ");
+    const textToInsert = isPng ? ` :${emoji}: ` : ` ${emoji} `;
+    const textarea = textareaRef.current;
+
+    if (textarea) {
+      const startPos = textarea.selectionStart;
+      const endPos = textarea.selectionEnd;
+      const newValue = content.substring(0, startPos) + textToInsert + content.substring(endPos);
+      
+      setContent(newValue);
+      
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(startPos + textToInsert.length, startPos + textToInsert.length);
+      }, 0);
+    } else {
+      setContent(prev => prev + textToInsert);
+    }
   };
 
   const renderContent = (text: string) => {
@@ -310,6 +331,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
     const isVideo = url.match(/\.(mp4|webm|mov)$/i);
     const isImage = url.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    const isAudio = url.match(/\.(mp3|wav|ogg|m4a)$/i);
 
     if (isVideo) {
       return (
@@ -318,7 +340,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         </div>
       );
     }
-
+    if (isAudio) {
+      return (
+        <div className="mt-3">
+          <audio src={url} controls className="w-full max-w-md" />
+        </div>
+      );
+    }
     if (isImage) {
       return (
         <div className="mt-3">
@@ -378,6 +406,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </a>
           
           <div className="flex items-center gap-3 sm:gap-4">
+            {/* Кнопка Новость дня */}
+            <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              <span className="hidden sm:inline">Новость дня</span>
+            </button>
+
             <div className="relative" ref={menuRef}>
               <button onClick={() => setIsCreateOpen(!isCreateOpen)} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-600 text-white px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-sm sm:text-base">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -405,6 +439,19 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </div>
         </div>
       </header>
+
+      {/* Выдвижная панель Новость дня */}
+      {isNewsOpen && (
+        <div className="bg-blue-50 dark:bg-[#121d21] border-b border-blue-200 dark:border-slate-800 p-4 shadow-inner mb-6">
+          <div className="max-w-5xl mx-auto">
+            <h3 className="font-bold text-blue-800 dark:text-blue-400 mb-1 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Новость дня
+            </h3>
+            <p className="text-slate-700 dark:text-slate-300 text-sm">{DAILY_NEWS}</p>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4">
         <div className="mb-8">
@@ -468,13 +515,23 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                  )}
 
                 <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                <textarea placeholder="Текст сообщения..." value={content} onChange={(e) => setContent(e.target.value)} rows={4} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" required></textarea>
+                
+                {/* ДОБАВЛЕН REF ДЛЯ TEXTAREA */}
+                <textarea 
+                  ref={textareaRef}
+                  placeholder="Текст сообщения..." 
+                  value={content} 
+                  onChange={(e) => setContent(e.target.value)} 
+                  rows={4} 
+                  className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" 
+                  required
+                ></textarea>
                 
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                   <div className="flex items-center gap-4">
                     <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
                       <ImageIcon /> <span>{file ? file.name : "Прикрепить файл"}</span>
-                      <input type="file" accept="image/*,video/*,application/pdf,.doc,.docx,.zip,.rar" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
+                      <input type="file" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.zip,.rar" onChange={(e) => setFile(e.target.files?.[0] || null)} className="hidden" />
                     </label>
                     {file && (
                       <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
@@ -490,7 +547,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ОШИБКА: {errorMsg}
+                    ⚠️ {errorMsg}
                   </div>
                 )}
 
