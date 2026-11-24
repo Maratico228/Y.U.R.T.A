@@ -44,7 +44,7 @@ export default function Guide() {
           {/* 2. Создание поста */}
           <section>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
-              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">3</span>
+              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">2</span>
               Как создать пост и прикрепить к нему файл?
             </h2>
             <p className="mb-3">Чтобы написать пост, выберите нужный раздел. Внутри раздела вы увидите форму.</p>
@@ -59,7 +59,7 @@ export default function Guide() {
           {/* 3. Ответы */}
           <section>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
-              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">4</span>
+              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">3</span>
               Как отвечать на сообщения
             </h2>
             <p className="mb-3">Если вы хотите ответить конкретному человеку, нажмите кнопку <b>«Ответить»</b> под его сообщением. В поле ввода автоматически появится ссылка (например, <code>&gt;&gt;123</code>). Это кликабельная метка, которая перенесёт читателя к нужному сообщению.</p>
@@ -68,7 +68,7 @@ export default function Guide() {
           {/* 4. Правила Досок (НОВОЕ) */}
           <section>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
-              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">5</span>
+              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">4</span>
               Правила разделов (Досок)
             </h2>
             <p className="mb-3">Юрта делится на разделы. Чтобы не было хаоса, мы ввели правила для них:</p>
@@ -91,7 +91,7 @@ export default function Guide() {
           {/* 5. Советы (НОВОЕ) */}
           <section>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-3">
-              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">6</span>
+              <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0">5</span>
               Полезные советы
             </h2>
             <ul className="list-disc pl-5 space-y-2">
