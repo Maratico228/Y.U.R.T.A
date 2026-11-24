@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { Turnstile } from "@marsidev/react-turnstile";
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -56,10 +56,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNewsOpen, setIsNewsOpen] = useState(false);
 
-  // --- КАПЧА: токен держим и в state (для UI), и в ref (для отправки) ---
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const captchaTokenRef = useRef<string | null>(null);
-  const turnstileRef = useRef<TurnstileInstance | null>(null);
+  const turnstileRef = useRef<any>(null);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -82,7 +81,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const currentBoard = boardInfo[params.slug] || { name: params.slug, description: `Беседа в разделе /${params.slug}/.` };
 
-  // --- Хелперы для капчи ---
   const setToken = (token: string | null) => {
     captchaTokenRef.current = token;
     setCaptchaToken(token);
@@ -147,43 +145,32 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (!content.trim()) return;
     if (cooldown) return setErrorMsg("Подождите 30 секунд!");
 
-    // Читаем токен из ref — он не «протухает» из-за React-рендеров
     const token = captchaTokenRef.current;
     if (!token) {
       setErrorMsg("Капча ещё не готова. Подождите 1–2 секунды после зелёной галочки.");
-      // Пытаемся перезапустить виджет, чтобы он выдал свежий токен
-      turnstileRef.current?.reset();
+      if (turnstileRef.current) turnstileRef.current.reset();
       return;
     }
 
     setLoading(true);
     const supabase = getSupabase();
 
-    // Анонимная сессия НЕ обязательна для отправки поста (вставка идёт через service_role).
-    // Если она падает — просто идём дальше, а не блокируем отправку.
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        const { error: authError } = await supabase.auth.signInAnonymously({
-          options: { captchaToken: token },
-        });
-        if (authError) console.warn("Анонимная авторизация не прошла:", authError.message);
+        await supabase.auth.signInAnonymously({ options: { captchaToken: token } });
       }
     } catch (err) {
-      console.warn("Анонимная авторизация跳过:", err);
+      console.warn("Анонимная авторизация пропущена:", err);
     }
 
-    // --- Загрузка файла ---
     let fileUrl: string | null = null;
     if (file) {
       const isVideo = file.type.startsWith('video/');
       const isImage = file.type.startsWith('image/');
       const isAudio = file.type.startsWith('audio/');
 
-      const maxSize = isVideo ? 10 * 1024 * 1024
-        : isImage ? 5 * 1024 * 1024
-        : isAudio ? 15 * 1024 * 1024
-        : 10 * 1024 * 1024;
+      const maxSize = isVideo ? 10 * 1024 * 1024 : isImage ? 5 * 1024 * 1024 : isAudio ? 15 * 1024 * 1024 : 10 * 1024 * 1024;
 
       if (file.size > maxSize) {
         setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : isImage ? '5' : isAudio ? '15' : '10'} МБ.`);
@@ -211,7 +198,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       fileUrl = urlData.publicUrl;
     }
 
-    // --- Отправка поста ---
     try {
       const response = await fetch('/api/create-post', {
         method: 'POST',
@@ -230,27 +216,19 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       const result = await response.json();
 
       if (!response.ok || result.error) {
-        // Показываем точную причину, включая коды Cloudflare — так сразу видно, в чём дело
-        const codes = Array.isArray(result.codes) && result.codes.length
-          ? ` (${result.codes.join(', ')})` : '';
+        const codes = Array.isArray(result.codes) && result.codes.length ? ` (${result.codes.join(', ')})` : '';
         setErrorMsg((result.error || "Ошибка отправки") + codes);
         setLoading(false);
-
-        // Токен одноразовый — сбрасываем капчу, чтобы следующий клик был со свежим токеном
         setToken(null);
-        turnstileRef.current?.reset();
+        if (turnstileRef.current) turnstileRef.current.reset();
         return;
       }
 
-      // --- Бамп треда при ответе ---
       if (replyTo) {
         const parentPost = posts.find((p: any) => p.id === replyTo.id);
         let rootId = replyTo.id;
         if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
-        await supabase
-          .from('posts')
-          .update({ bumped_at: new Date().toISOString() })
-          .eq('id', rootId);
+        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
       }
 
       setContent("");
@@ -263,7 +241,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       setTimeout(() => setCooldown(false), 30000);
 
       setToken(null);
-      turnstileRef.current?.reset();
+      if (turnstileRef.current) turnstileRef.current.reset();
     } catch (err: any) {
       setErrorMsg("Сетевая ошибка: " + (err?.message || err));
     } finally {
@@ -587,28 +565,18 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                   </div>
                 </div>
 
-                {/* --- КАПЧА --- */}
                 <div className="mt-4 flex flex-col items-center gap-1">
                   <Turnstile
-                    ref={turnstileRef as any}
+                    ref={turnstileRef}
                     siteKey="0x4AAAAAAF9rxOxsJCAeQlCH"
-                    theme={isDark ? "dark" : "light"}
-                    language="ru"
-                    refresh="auto"
+                    options={{
+                      theme: isDark ? 'dark' : 'light',
+                      language: 'ru',
+                    }}
                     onSuccess={(token) => {
-                      console.log("[turnstile] token получен");
                       setToken(token);
                     }}
-                    onExpire={() => {
-                      console.warn("[turnstile] token истёк");
-                      setToken(null);
-                    }}
-                    onChallengeExpired={() => {
-                      console.warn("[turnstile] challenge истёк");
-                      setToken(null);
-                    }}
-                    onError={(code) => {
-                      console.error("[turnstile] error:", code);
+                    onError={() => {
                       setToken(null);
                       setErrorMsg("Капча не загрузилась. Обновите страницу.");
                     }}
@@ -672,7 +640,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 const replies = getReplies(thread.id);
                 return (
                   <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
-
                     <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
