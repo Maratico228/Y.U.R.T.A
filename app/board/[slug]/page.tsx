@@ -54,7 +54,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [isDark, setIsDark] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isNewsOpen, setIsNewsOpen] = useState(false); // Стейт для Новости Дня
+  const [isNewsOpen, setIsNewsOpen] = useState(false);
   
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaKey, setCaptchaKey] = useState(0);
@@ -62,7 +62,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const formRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null); // Ref для вставки смайлов по курсору
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const boardInfo: Record<string, { name: string, description: string }> = {
     humanities: { name: "Гуманитарные науки", description: "Беседа Высшей школы гуманитарных наук." },
@@ -152,9 +152,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     if (file) {
       const isVideo = file.type.startsWith('video/');
       const isImage = file.type.startsWith('image/');
-      const isAudio = file.type.startsWith('audio/'); // Проверка на аудио
+      const isAudio = file.type.startsWith('audio/');
       
-      // Лимиты: видео 10МБ, картинки 5МБ, аудио 15МБ, остальное 10МБ
       const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : (isAudio ? 15 * 1024 * 1024 : 10 * 1024 * 1024));
 
       if (file.size > maxSize) {
@@ -181,40 +180,48 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    // ВЫЗОВ EDGE FUNCTION (Серверная вставка с проверкой капчи)
-    const { data: fnData, error: fnError } = await supabase.functions.invoke('create-post', {
-      body: {
-        board_slug: params.slug,
-        nickname: nickname.trim() || null,
-        content: content.trim(),
-        image_url: fileUrl,
-        parent_id: replyTo ? replyTo.id : null,
-        is_spoiler: isSpoiler,
-        captchaToken: captchaToken,
-      },
-    });
+    // НОВЫЙ ПРОСТОЙ ВЫЗОВ: обычный fetch к нашему API роуту
+    try {
+      const response = await fetch('/api/create-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          board_slug: params.slug,
+          nickname: nickname.trim() || null,
+          content: content.trim(),
+          image_url: fileUrl,
+          parent_id: replyTo ? replyTo.id : null,
+          is_spoiler: isSpoiler,
+        }),
+      });
 
-    if (fnError || fnData?.error) {
-      setErrorMsg(fnData?.error || fnError?.message || "Ошибка отправки");
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        setErrorMsg(result.error || "Ошибка отправки");
+        setLoading(false);
+        return;
+      }
+
+      // Обновление бампа (если это ответ)
+      if (replyTo) {
+        const parentPost = posts.find((p: any) => p.id === replyTo.id);
+        let rootId = replyTo.id;
+        if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
+        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
+      }
+      
+      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
+      await fetchPosts();
+      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
+      
+      setCaptchaToken(null);
+      setCaptchaKey(prev => prev + 1); 
+    } catch (err: any) {
+      setErrorMsg("Сетевая ошибка: " + err.message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Обновление бампа (если это ответ)
-    if (replyTo) {
-      const parentPost = posts.find((p: any) => p.id === replyTo.id);
-      let rootId = replyTo.id;
-      if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
-      await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
-    }
-    
-    setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
-    await fetchPosts();
-    setCooldown(true); setTimeout(() => setCooldown(false), 30000);
-    
-    setCaptchaToken(null);
-    setCaptchaKey(prev => prev + 1); 
-    setLoading(false);
   };
 
   const compressImage = (file: File): Promise<File> => {
@@ -271,7 +278,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     }, 100);
   };
 
-  // ВСТАВКА СМАЙЛОВ ПО КУРСОРУ
   const insertEmoji = (emoji: string, isPng: boolean = false) => {
     const textToInsert = isPng ? ` :${emoji}: ` : ` ${emoji} `;
     const textarea = textareaRef.current;
@@ -406,7 +412,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           </a>
           
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Кнопка Новость дня */}
             <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
               <span className="hidden sm:inline">Новость дня</span>
@@ -440,7 +445,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         </div>
       </header>
 
-      {/* Выдвижная панель Новость дня */}
       {isNewsOpen && (
         <div className="bg-blue-50 dark:bg-[#121d21] border-b border-blue-200 dark:border-slate-800 p-4 shadow-inner mb-6">
           <div className="max-w-5xl mx-auto">
@@ -516,7 +520,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
                 
-                {/* ДОБАВЛЕН REF ДЛЯ TEXTAREA */}
                 <textarea 
                   ref={textareaRef}
                   placeholder="Текст сообщения..." 
@@ -547,7 +550,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 {errorMsg && (
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-md text-sm mb-2">
-                    ⚠️ {errorMsg}
+                    ОШИБКА: {errorMsg}
                   </div>
                 )}
 
