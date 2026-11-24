@@ -16,7 +16,7 @@ const BOARDS = [
   { name: "Раздел бред", slug: "flood" },
 ];
 
-const DAILY_NEWS = "Добро пожаловать на Юрту! Это текст-заглушка для новости дня. Вы можете изменить его в коде (переменная DAILY_NEWS).";
+const DAILY_NEWS = "Теперь в треды можно прикреплять не только фотографии или видеоролики, но и аудиофайлы! Поделитесь с анонимами своей любимой песней! (также была значительно улучшена безопасность сайта)";
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -257,7 +257,7 @@ export default function Home() {
           <div className="max-w-6xl mx-auto">
             <h3 className="font-bold text-blue-800 dark:text-blue-400 mb-1 flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              Новость дня
+              ОБНОВЛЕНИЕ!
             </h3>
             <p className="text-slate-700 dark:text-slate-300 text-sm">{DAILY_NEWS}</p>
           </div>
