@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getSupabase } from "@/lib/supabase";
-import { Turnstile } from "@marsidev/react-turnstile";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 
 const TEXT_EMOJIS = [
   "ಠ_ಠ", "( ͡° ͜ʖ ͡°)", ":3", "¯\\_(ツ)_/¯", "(╯°□°)╯︵ ┻━┻",
@@ -16,7 +16,7 @@ const TEXT_EMOJIS = [
 ];
 
 const PNG_EMOJIS = [
-  "smile", "heart", "fire", "sad", "lightning", 
+  "smile", "heart", "fire", "sad", "lightning",
   "laugh", "cry", "cool", "angry", "think"
 ];
 
@@ -41,11 +41,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isSpoiler, setIsSpoiler] = useState(false);
-  
+
   const [loading, setLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [replyTo, setReplyTo] = useState<any>(null);
-  
+
   const [cooldown, setCooldown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
@@ -55,9 +55,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNewsOpen, setIsNewsOpen] = useState(false);
-  
+
+  // --- КАПЧА: токен держим и в state (для UI), и в ref (для отправки) ---
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaKey, setCaptchaKey] = useState(0);
+  const captchaTokenRef = useRef<string | null>(null);
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const formRef = useRef<HTMLDivElement>(null);
@@ -78,6 +81,12 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   };
 
   const currentBoard = boardInfo[params.slug] || { name: params.slug, description: `Беседа в разделе /${params.slug}/.` };
+
+  // --- Хелперы для капчи ---
+  const setToken = (token: string | null) => {
+    captchaTokenRef.current = token;
+    setCaptchaToken(token);
+  };
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme");
@@ -122,7 +131,11 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const fetchPosts = async () => {
     setIsFetching(true);
     const supabase = getSupabase();
-    const { data } = await supabase.from('posts').select('*').eq('board_slug', params.slug).order('bumped_at', { ascending: false });
+    const { data } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('board_slug', params.slug)
+      .order('bumped_at', { ascending: false });
     if (data) setPosts(data);
     setIsFetching(false);
   };
@@ -130,57 +143,75 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    
+
     if (!content.trim()) return;
     if (cooldown) return setErrorMsg("Подождите 30 секунд!");
-    if (!captchaToken) return setErrorMsg("Пожалуйста, подтвердите, что вы не робот.");
+
+    // Читаем токен из ref — он не «протухает» из-за React-рендеров
+    const token = captchaTokenRef.current;
+    if (!token) {
+      setErrorMsg("Капча ещё не готова. Подождите 1–2 секунды после зелёной галочки.");
+      // Пытаемся перезапустить виджет, чтобы он выдал свежий токен
+      turnstileRef.current?.reset();
+      return;
+    }
 
     setLoading(true);
     const supabase = getSupabase();
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
-      if (authError) {
-        setErrorMsg("Ошибка авторизации: " + authError.message);
-        setLoading(false);
-        return;
+    // Анонимная сессия НЕ обязательна для отправки поста (вставка идёт через service_role).
+    // Если она падает — просто идём дальше, а не блокируем отправку.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        const { error: authError } = await supabase.auth.signInAnonymously({
+          options: { captchaToken: token },
+        });
+        if (authError) console.warn("Анонимная авторизация не прошла:", authError.message);
       }
+    } catch (err) {
+      console.warn("Анонимная авторизация跳过:", err);
     }
 
-    let fileUrl = null;
+    // --- Загрузка файла ---
+    let fileUrl: string | null = null;
     if (file) {
       const isVideo = file.type.startsWith('video/');
       const isImage = file.type.startsWith('image/');
       const isAudio = file.type.startsWith('audio/');
-      
-      const maxSize = isVideo ? 10 * 1024 * 1024 : (isImage ? 5 * 1024 * 1024 : (isAudio ? 15 * 1024 * 1024 : 10 * 1024 * 1024));
+
+      const maxSize = isVideo ? 10 * 1024 * 1024
+        : isImage ? 5 * 1024 * 1024
+        : isAudio ? 15 * 1024 * 1024
+        : 10 * 1024 * 1024;
 
       if (file.size > maxSize) {
-        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : (isImage ? '5' : (isAudio ? '15' : '10'))} МБ.`);
+        setErrorMsg(`Файл слишком большой. Максимум: ${isVideo ? '10' : isImage ? '5' : isAudio ? '15' : '10'} МБ.`);
         setLoading(false);
         return;
       }
 
       let fileToUpload = file;
-      if (isImage) {
-        fileToUpload = await compressImage(file);
-      }
+      if (isImage) fileToUpload = await compressImage(file);
 
-      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${file.name.substring(file.name.lastIndexOf('.'))}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('images').upload(safeFileName, fileToUpload, { upsert: false });
-      
-      if (!uploadError && uploadData) {
-        const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
-        fileUrl = urlData.publicUrl;
-      } else {
-        setErrorMsg("Ошибка при загрузке файла.");
+      const ext = file.name.substring(file.name.lastIndexOf('.'));
+      const safeFileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(safeFileName, fileToUpload, { upsert: false });
+
+      if (uploadError) {
+        setErrorMsg("Ошибка при загрузке файла: " + uploadError.message);
         setLoading(false);
         return;
       }
+
+      const { data: urlData } = supabase.storage.from('images').getPublicUrl(safeFileName);
+      fileUrl = urlData.publicUrl;
     }
 
-    // НОВЫЙ ПРОСТОЙ ВЫЗОВ: обычный fetch к нашему API роуту
+    // --- Отправка поста ---
     try {
       const response = await fetch('/api/create-post', {
         method: 'POST',
@@ -192,33 +223,49 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           image_url: fileUrl,
           parent_id: replyTo ? replyTo.id : null,
           is_spoiler: isSpoiler,
+          captchaToken: token,
         }),
       });
 
       const result = await response.json();
 
       if (!response.ok || result.error) {
-        setErrorMsg(result.error || "Ошибка отправки");
+        // Показываем точную причину, включая коды Cloudflare — так сразу видно, в чём дело
+        const codes = Array.isArray(result.codes) && result.codes.length
+          ? ` (${result.codes.join(', ')})` : '';
+        setErrorMsg((result.error || "Ошибка отправки") + codes);
         setLoading(false);
+
+        // Токен одноразовый — сбрасываем капчу, чтобы следующий клик был со свежим токеном
+        setToken(null);
+        turnstileRef.current?.reset();
         return;
       }
 
-      // Обновление бампа (если это ответ)
+      // --- Бамп треда при ответе ---
       if (replyTo) {
         const parentPost = posts.find((p: any) => p.id === replyTo.id);
         let rootId = replyTo.id;
         if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
-        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
+        await supabase
+          .from('posts')
+          .update({ bumped_at: new Date().toISOString() })
+          .eq('id', rootId);
       }
-      
-      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
+
+      setContent("");
+      setFile(null);
+      setReplyTo(null);
+      setIsSpoiler(false);
       await fetchPosts();
-      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
-      
-      setCaptchaToken(null);
-      setCaptchaKey(prev => prev + 1); 
+
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 30000);
+
+      setToken(null);
+      turnstileRef.current?.reset();
     } catch (err: any) {
-      setErrorMsg("Сетевая ошибка: " + err.message);
+      setErrorMsg("Сетевая ошибка: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
@@ -233,12 +280,13 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement("canvas");
-          const MAX_WIDTH = 1200; 
-          const scale = Math.min(1, MAX_WIDTH / img.width); 
-          canvas.width = img.width * scale; canvas.height = img.height * scale;
+          const MAX_WIDTH = 1200;
+          const scale = Math.min(1, MAX_WIDTH / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
           const ctx = canvas.getContext("2d");
           ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          
+
           canvas.toBlob((blob) => {
             if (blob) {
               const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
@@ -286,9 +334,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       const startPos = textarea.selectionStart;
       const endPos = textarea.selectionEnd;
       const newValue = content.substring(0, startPos) + textToInsert + content.substring(endPos);
-      
       setContent(newValue);
-      
       setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(startPos + textToInsert.length, startPos + textToInsert.length);
@@ -301,7 +347,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const renderContent = (text: string) => {
     let formattedText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-    formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (match, id) => {
+    formattedText = formattedText.replace(/&gt;&gt;(\d+)/g, (_match, id) => {
       return `<a href="#post-${id}" onclick="event.preventDefault(); const el = document.getElementById('post-${id}'); if(el) { el.scrollIntoView({behavior: 'smooth', block: 'center'}); el.classList.add('ring-2', 'ring-blue-500', 'bg-blue-500/10'); setTimeout(() => el.classList.remove('ring-2', 'ring-blue-500', 'bg-blue-500/10'), 2000); }" class="text-blue-700 dark:text-blue-400 hover:underline font-bold">>>${id}</a>`;
     });
 
@@ -312,7 +358,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     });
 
     TEXT_EMOJIS.forEach(emoji => {
-      const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+      const safeEmoji = emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(safeEmoji, 'g');
       formattedText = formattedText.replace(regex, `<span style="color: #2563eb; font-weight: bold;">${emoji}</span>`);
     });
@@ -323,9 +369,8 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
   const PostMedia = ({ url, isSpoiler }: { url: string, isSpoiler?: boolean }) => {
     const [revealed, setRevealed] = useState(!isSpoiler);
-    
     if (!url) return null;
-    
+
     if (isSpoiler && !revealed) {
       return (
         <div onClick={() => setRevealed(true)} className="mt-3 cursor-pointer rounded border border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500" style={{ height: '150px', width: '200px' }}>
@@ -347,11 +392,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       );
     }
     if (isAudio) {
-      return (
-        <div className="mt-3">
-          <audio src={url} controls className="w-full max-w-md" />
-        </div>
-      );
+      return <div className="mt-3"><audio src={url} controls className="w-full max-w-md" /></div>;
     }
     if (isImage) {
       return (
@@ -381,7 +422,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     while (lastCount !== allReplies.length) {
       lastCount = allReplies.length;
       const currentIds = allReplies.map((r: any) => r.id);
-      const nestedReplies = posts.filter((p: any) => p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find((ar: any) => ar.id === p.id));
+      const nestedReplies = posts.filter((p: any) =>
+        p.parent_id && currentIds.includes(p.parent_id) && !allReplies.find((ar: any) => ar.id === p.id)
+      );
       allReplies = [...allReplies, ...nestedReplies];
     }
     return allReplies.sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -410,7 +453,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
           <a href="/">
             <img src="/logo.png" alt="Logo" style={{ height: '48px', width: 'auto' }} className="dark:brightness-0 dark:invert" />
           </a>
-          
+
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
@@ -422,7 +465,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 <span className="hidden sm:inline">Создать тред</span>
               </button>
-              
+
               {isCreateOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1a282d] border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl py-2 z-50 max-h-96 overflow-y-auto">
                   <div className="px-4 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Выберите доску</div>
@@ -469,7 +512,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             <button onClick={() => setActiveTab('board')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'board' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Доска</button>
             <button onClick={() => setActiveTab('catalog')} className={`flex-1 sm:flex-none px-4 py-2 text-sm font-bold rounded ${activeTab === 'catalog' ? 'bg-blue-100 dark:bg-slate-800 text-blue-800 dark:text-blue-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>Каталог</button>
           </div>
-          
+
           <div className="relative w-full sm:w-64">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><SearchIcon /></div>
             <input type="text" placeholder="Поиск..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full border border-slate-300 dark:border-slate-700 bg-transparent rounded pl-10 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
@@ -481,55 +524,55 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
             <div className="p-6">
               <h2 className="text-lg font-bold mb-4">{replyTo ? `Ответ на пост №${replyTo.id}` : "Создать новый тред"}</h2>
               {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить</button>}
-              
+
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                 <div className="flex gap-2 mb-1">
-                    <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700">
-                      <SmileIcon /> {showEmojis ? "Скрыть смайлы" : "Показать смайлы"}
-                    </button>
-                 </div>
+                <div className="flex gap-2 mb-1">
+                  <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700">
+                    <SmileIcon /> {showEmojis ? "Скрыть смайлы" : "Показать смайлы"}
+                  </button>
+                </div>
 
-                 {showEmojis && (
-                    <div className="bg-slate-50 dark:bg-[#121d21] rounded border border-slate-200 dark:border-slate-800 mb-2 overflow-hidden">
-                      <div className="flex border-b border-slate-200 dark:border-slate-700">
-                        <button type="button" onClick={() => setEmojiTab('png')} className={`flex-1 py-2 text-xs font-bold ${emojiTab === 'png' ? 'bg-white dark:bg-slate-800 text-blue-600' : 'text-slate-500'}`}>Картинки</button>
-                        <button type="button" onClick={() => setEmojiTab('text')} className={`flex-1 py-2 text-xs font-bold ${emojiTab === 'text' ? 'bg-white dark:bg-slate-800 text-blue-600' : 'text-slate-500'}`}>Текстовые</button>
-                      </div>
-
-                      <div className="p-3">
-                        {emojiTab === 'png' ? (
-                          <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                            {PNG_EMOJIS.map((name) => (
-                              <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors">
-                                 <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 max-h-48 overflow-y-auto">
-                            {TEXT_EMOJIS.map((emoji) => (
-                              <button key={emoji} type="button" onClick={() => insertEmoji(emoji, false)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-700 px-1 py-2 rounded font-mono flex items-center justify-center break-all transition-colors">
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                {showEmojis && (
+                  <div className="bg-slate-50 dark:bg-[#121d21] rounded border border-slate-200 dark:border-slate-800 mb-2 overflow-hidden">
+                    <div className="flex border-b border-slate-200 dark:border-slate-700">
+                      <button type="button" onClick={() => setEmojiTab('png')} className={`flex-1 py-2 text-xs font-bold ${emojiTab === 'png' ? 'bg-white dark:bg-slate-800 text-blue-600' : 'text-slate-500'}`}>Картинки</button>
+                      <button type="button" onClick={() => setEmojiTab('text')} className={`flex-1 py-2 text-xs font-bold ${emojiTab === 'text' ? 'bg-white dark:bg-slate-800 text-blue-600' : 'text-slate-500'}`}>Текстовые</button>
                     </div>
-                 )}
+
+                    <div className="p-3">
+                      {emojiTab === 'png' ? (
+                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                          {PNG_EMOJIS.map((name) => (
+                            <button key={name} type="button" onClick={() => insertEmoji(name, true)} className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded transition-colors">
+                              <img src={`/emojis/${name}.png`} alt={name} className="w-6 h-6 mx-auto opacity-80 dark:brightness-0 dark:invert" onError={(e) => (e.target as HTMLImageElement).style.display = 'none'} />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1 max-h-48 overflow-y-auto">
+                          {TEXT_EMOJIS.map((emoji) => (
+                            <button key={emoji} type="button" onClick={() => insertEmoji(emoji, false)} className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-700 px-1 py-2 rounded font-mono flex items-center justify-center break-all transition-colors">
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <input type="text" placeholder="Твой ник (необязательно)" value={nickname} onChange={(e) => setNickname(e.target.value)} className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                
-                <textarea 
+
+                <textarea
                   ref={textareaRef}
-                  placeholder="Текст сообщения..." 
-                  value={content} 
-                  onChange={(e) => setContent(e.target.value)} 
-                  rows={4} 
-                  className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono" 
+                  placeholder="Текст сообщения..."
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={4}
+                  className="border border-slate-300 dark:border-slate-700 bg-transparent rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none font-mono"
                   required
                 ></textarea>
-                
+
                 <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
                   <div className="flex items-center gap-4">
                     <label className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
@@ -543,9 +586,36 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                     )}
                   </div>
                 </div>
-                
-                <div className="mt-4 flex justify-center">
-                  <Turnstile key={captchaKey} siteKey="0x4AAAAAAF9rxOxsJCAeQlCH" onSuccess={(token) => setCaptchaToken(token)} />
+
+                {/* --- КАПЧА --- */}
+                <div className="mt-4 flex flex-col items-center gap-1">
+                  <Turnstile
+                    ref={turnstileRef as any}
+                    siteKey="0x4AAAAAAF9rxOxsJCAeQlCH"
+                    theme={isDark ? "dark" : "light"}
+                    language="ru"
+                    refresh="auto"
+                    onSuccess={(token) => {
+                      console.log("[turnstile] token получен");
+                      setToken(token);
+                    }}
+                    onExpire={() => {
+                      console.warn("[turnstile] token истёк");
+                      setToken(null);
+                    }}
+                    onChallengeExpired={() => {
+                      console.warn("[turnstile] challenge истёк");
+                      setToken(null);
+                    }}
+                    onError={(code) => {
+                      console.error("[turnstile] error:", code);
+                      setToken(null);
+                      setErrorMsg("Капча не загрузилась. Обновите страницу.");
+                    }}
+                  />
+                  <span className={`text-[11px] ${captchaToken ? 'text-green-600' : 'text-slate-400'}`}>
+                    {captchaToken ? "✓ капча готова — можно отправлять" : "ожидание капчи…"}
+                  </span>
                 </div>
 
                 {errorMsg && (
@@ -602,14 +672,14 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                 const replies = getReplies(thread.id);
                 return (
                   <div id={`post-${thread.id}`} key={thread.id} className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col transition-all duration-300">
-                    
+
                     <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`font-bold ${thread.nickname ? 'text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>{thread.nickname || "Аноним"}</span>
                         <span className="text-xs text-slate-400">{new Date(thread.created_at).toLocaleString('ru-RU')}</span>
                         <span className="text-xs text-slate-400 ml-auto">№{thread.id}</span>
                         <span className="text-xs text-slate-400 ml-2">Ответов: {replies.length}</span>
-                        
+
                         <button onClick={() => handleShare(thread.id)} className="text-slate-400 hover:text-blue-500 ml-2">
                           <ShareIcon />
                         </button>
@@ -617,9 +687,9 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
                           <WarningIcon />
                         </a>
                       </div>
-                      
+
                       <div className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{renderContent(thread.content)}</div>
-                      
+
                       <PostMedia url={thread.image_url} isSpoiler={thread.is_spoiler} />
                     </div>
 
