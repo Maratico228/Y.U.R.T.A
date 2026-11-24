@@ -33,7 +33,7 @@ const BOARDS = [
   { name: "Раздел бред", slug: "flood" },
 ];
 
-const DAILY_NEWS = "Добро пожаловать на Юрту! Это текст-заглушка для новости дня. Вы можете изменить его в коде (переменная DAILY_NEWS).";
+const DAILY_NEWS = "Теперь в треды можно прикреплять не только фотографии или видеоролики, но и аудиофайлы! Поделитесь с анонимами своей любимой песней! (также была значительно улучшена безопасность сайта)";
 
 export default function BoardPage({ params }: { params: { slug: string } }) {
   const [posts, setPosts] = useState<any[]>([]);
@@ -434,8 +434,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
           <div className="flex items-center gap-3 sm:gap-4">
             <button onClick={() => setIsNewsOpen(!isNewsOpen)} className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-2 rounded-lg transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
-              <span className="hidden sm:inline">Новость дня</span>
+              <span className="hidden sm:inline">ОБНОВЛЕНИЕ</span>
             </button>
 
             <div className="relative" ref={menuRef}>
@@ -594,7 +593,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
 
                 <div className="flex justify-end mt-2">
                   <button type="submit" disabled={loading || cooldown} className={`font-bold py-2 px-6 rounded w-full sm:w-auto ${cooldown ? 'bg-slate-400 text-white' : 'bg-blue-700 text-white hover:bg-blue-600'}`}>
-                    {loading ? "Отправка..." : cooldown ? "Ждите..." : "Отправить"}
+                    {loading ? "Отправка..." : cooldown ? "Ждите 30 секунд..." : "Отправить"}
                   </button>
                 </div>
               </form>
