@@ -275,10 +275,10 @@ export default function Home() {
           <div className="bg-white dark:bg-[#1a282d] rounded-lg border border-slate-200 dark:border-slate-800 p-4">
             <div className="flex items-center gap-2 mb-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-              <h2 className="text-sm font-bold uppercase tracking-wide">Важно</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wide">Помогите проетку развиваться!</h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
-              Юрта продолжает подвергаться атакам, но мы держим оборону! Пожалуйста, поделитесь ссылкой на сайт в своих студенческих чатах.
+              Сейчас здесь очень мало людей :-( Пожалуйста, поделитесь ссылкой на сайт в своих студенческих чатах. Это здорово поспособствует развитию моего проекта!
             </p>
             <button onClick={copyLink} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-blue-100 dark:bg-slate-800 text-blue-700 dark:text-blue-300 hover:bg-blue-200'}`}>
               {copied ? "Скопировано!" : "Скопировать ссылку"}
