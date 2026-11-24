@@ -48,7 +48,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<'board' | 'catalog'>('board');
   const [showEmojis, setShowEmojis] = useState(false);
-  const [emojiTab, setEmojiTab] = useState<'text' | 'png'>('png'); // Вкладка для смайлов
+  const [emojiTab, setEmojiTab] = useState<'text' | 'png'>('png');
   const [isDark, setIsDark] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -134,6 +134,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
     setLoading(true);
     const supabase = getSupabase();
 
+    // 1. Авторизация (нужна для загрузки файла в Storage)
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       const { error: authError } = await supabase.auth.signInAnonymously({ options: { captchaToken } });
@@ -144,6 +145,7 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
+    // 2. Загрузка файла (остается на клиенте, но защищена RLS Storage)
     let fileUrl = null;
     if (file) {
       const isVideo = file.type.startsWith('video/');
@@ -174,23 +176,36 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
       }
     }
 
-    const newPost = { board_slug: params.slug, nickname: nickname.trim() || null, content: content.trim(), image_url: fileUrl, parent_id: replyTo ? replyTo.id : null, is_spoiler: isSpoiler };
-    const { error } = await supabase.from('posts').insert([newPost]);
+    // 3. ВЫЗОВ EDGE FUNCTION (Серверная вставка с проверкой капчи)
+    const { data: fnData, error: fnError } = await supabase.functions.invoke('create-post', {
+      body: {
+        board_slug: params.slug,
+        nickname: nickname.trim() || null,
+        content: content.trim(),
+        image_url: fileUrl,
+        parent_id: replyTo ? replyTo.id : null,
+        is_spoiler: isSpoiler,
+        captchaToken: captchaToken, // Передаем токен для проверки на сервере
+      },
+    });
 
-    if (!error) {
-      if (replyTo) {
-        const parentPost = posts.find((p: any) => p.id === replyTo.id);
-        let rootId = replyTo.id;
-        if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
-        await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
-      }
-      
-      setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
-      await fetchPosts();
-      setCooldown(true); setTimeout(() => setCooldown(false), 30000);
-    } else {
-      setErrorMsg(error.message); 
+    if (fnError || fnData?.error) {
+      setErrorMsg(fnData?.error || fnError?.message || "Ошибка отправки");
+      setLoading(false);
+      return;
     }
+
+    // 4. Обновление бампа (если это ответ)
+    if (replyTo) {
+      const parentPost = posts.find((p: any) => p.id === replyTo.id);
+      let rootId = replyTo.id;
+      if (parentPost && parentPost.parent_id) rootId = parentPost.parent_id;
+      await supabase.from('posts').update({ bumped_at: new Date().toISOString() }).eq('id', rootId);
+    }
+    
+    setContent(""); setFile(null); setReplyTo(null); setIsSpoiler(false); 
+    await fetchPosts();
+    setCooldown(true); setTimeout(() => setCooldown(false), 30000);
     
     setCaptchaToken(null);
     setCaptchaKey(prev => prev + 1); 
@@ -417,8 +432,6 @@ export default function BoardPage({ params }: { params: { slug: string } }) {
               {replyTo && <button onClick={() => setReplyTo(null)} className="text-sm text-red-500 mb-2 hover:underline">Отменить</button>}
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                 
-                 {/* ПАНЕЛЬ ЭМОДЖИ С ВКЛАДКАМИ */}
                  <div className="flex gap-2 mb-1">
                     <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 font-medium bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded border border-slate-200 dark:border-slate-700">
                       <SmileIcon /> {showEmojis ? "Скрыть смайлы" : "Показать смайлы"}
